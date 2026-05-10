@@ -145,7 +145,9 @@ class ScrapeRunHealth(Base):
     __tablename__ = "scrape_run_health"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     category: Mapped[str] = mapped_column(String(32), index=True)
-    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    ts: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
     success_count: Mapped[int] = mapped_column(Integer)
     failure_count: Mapped[int] = mapped_column(Integer)
     used_playwright_fallback: Mapped[bool] = mapped_column(Boolean, default=False)
