@@ -1,8 +1,7 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.storage.base import StorageKey
-from aiogram.fsm.storage.memory import MemoryStorage
+
+import pytest
+
 from apps.shared.enums import UserState
 
 
@@ -12,11 +11,6 @@ def make_message(user_id: int = 123, text: str = "/help") -> MagicMock:
     msg.from_user = MagicMock(id=user_id, username="tester")
     msg.answer = AsyncMock()
     return msg
-
-
-async def make_ctx(storage: MemoryStorage, user_id: int = 123) -> FSMContext:
-    key = StorageKey(bot_id=1, user_id=user_id, chat_id=user_id)
-    return FSMContext(storage=storage, key=key)
 
 
 def make_user_row(state: str = UserState.ACTIVE):

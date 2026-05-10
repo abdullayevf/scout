@@ -2,15 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
 
 from aiogram import Router
 from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import Message
 from sqlalchemy import select
 
-from apps.bot import keyboards as kb
+from apps.bot import keyboards as kb  # noqa: F401 (used in Task 7 /delete, /reonboard)
 from apps.bot import messages as msg
 from apps.shared.db import session_scope
 from apps.shared.enums import UserState
@@ -46,7 +44,7 @@ def _write_event(kind: str, user_id: int | None) -> None:
 # ---------------------------------------------------------------------------
 
 async def require_active_user(message: Message) -> bool:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     user = await loop.run_in_executor(None, _get_user, message.from_user.id)
     if user is None or user.state == UserState.DELETED:
         await message.answer(msg.NOT_ONBOARDED)
@@ -69,7 +67,7 @@ async def cmd_help(message: Message) -> None:
 
 @router.message(Command("pause"))
 async def cmd_pause(message: Message) -> None:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     user = await loop.run_in_executor(None, _get_user, message.from_user.id)
     if user is None or user.state == UserState.DELETED:
         await message.answer(msg.NOT_ONBOARDED)
@@ -89,7 +87,7 @@ async def cmd_pause(message: Message) -> None:
 
 @router.message(Command("resume"))
 async def cmd_resume(message: Message) -> None:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     user = await loop.run_in_executor(None, _get_user, message.from_user.id)
     if user is None or user.state == UserState.DELETED:
         await message.answer(msg.NOT_ONBOARDED)
