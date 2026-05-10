@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from apps.shared.config import settings
 from apps.shared.db import session_scope
+from apps.shared.dedup.tiered import dedup_decide
 from apps.shared.enrichment import currency, embed, images, language, risk, translate
 from apps.shared.enrichment.classify import classify_listing
 from apps.shared.enums import ListingState, PosterRole
@@ -137,6 +138,9 @@ def _enrich_one(listing_id: int) -> dict:
         row.risk_score = score
         row.risk_flags = flags
         row.suppressed = score >= 3  # HARD threshold; soft warnings come from flags
+
+        # 9a. dedup — set canonical_listing_id if a match is found
+        dedup_decide(s, row)
 
         # 9. embed
         emb_text = embed.build_listing_embedding_text(
