@@ -1,5 +1,4 @@
-import os
-from apps.shared.config import settings, Settings
+from apps.shared.config import Settings
 
 
 def test_settings_loads_from_env(monkeypatch):
