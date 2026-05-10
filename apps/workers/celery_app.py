@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab  # noqa: F401
 
 from apps.shared.config import settings
 
@@ -25,5 +26,21 @@ app.conf.update(
     worker_prefetch_multiplier=1,
 )
 
-# Beat schedule wired progressively in later tasks; placeholder dict for now.
-app.conf.beat_schedule = {}
+app.conf.beat_schedule = {
+    "scrape-long-term": {
+        "task": "scrape.olx.category",
+        "schedule": 300,  # 5 min
+        "args": ("long_term_apt",),
+    },
+    "scrape-rooms": {
+        "task": "scrape.olx.category",
+        "schedule": 300,
+        "args": ("rooms",),
+    },
+    "scrape-looking-for": {
+        "task": "scrape.olx.category",
+        "schedule": 300,
+        "args": ("looking_for",),
+    },
+    # daily category disabled by default; enable per user demand later
+}
