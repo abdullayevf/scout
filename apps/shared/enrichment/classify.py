@@ -14,9 +14,9 @@ CLASSIFY_SCHEMA = {
             "type": "string",
             "enum": ["any", "male", "female"],
         },
-        "is_furnished": {"type": ["boolean", "null"]},
-        "has_parking": {"type": ["boolean", "null"]},
-        "is_first_floor": {"type": ["boolean", "null"]},
+        "is_furnished": {"type": "boolean", "nullable": True},
+        "has_parking": {"type": "boolean", "nullable": True},
+        "is_first_floor": {"type": "boolean", "nullable": True},
         "bathroom_type": {
             "type": "string",
             "enum": ["private", "shared", "unknown"],
@@ -25,7 +25,7 @@ CLASSIFY_SCHEMA = {
             "type": "string",
             "enum": ["owner", "agent", "unknown"],
         },
-        "agent_fee_text": {"type": ["string", "null"]},
+        "agent_fee_text": {"type": "string", "nullable": True},
         "summary_one_line": {"type": "string"},
     },
     "required": [
