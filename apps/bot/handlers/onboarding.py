@@ -10,7 +10,6 @@ from aiogram.types import CallbackQuery, Message
 
 from apps.bot import keyboards as kb
 from apps.bot import messages as msg
-from apps.bot.keyboards import AXIS_LABELS
 from apps.bot.states import Onboarding
 from apps.shared.geo.yandex import GeocodeResult, geocode
 
