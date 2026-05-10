@@ -16,3 +16,11 @@ def test_settings_loads_from_env(monkeypatch):
     assert s.postgres_dsn == "postgresql+psycopg://u:p@db.example:6543/x"
     assert s.redis_url == "redis://r:1/0"
     assert s.embedding_dim == 768
+
+
+def test_telegram_fields_present():
+    from apps.shared.config import Settings
+    fields = Settings.model_fields
+    assert "telegram_bot_token" in fields
+    assert "telegram_webhook_url" in fields
+    assert "telegram_webhook_secret" in fields

@@ -27,3 +27,23 @@ def test_embed_listing_calls_llm():
     out = embed_listing("any text", llm=llm)
     assert len(out) == 768
     llm.embed.assert_called_once_with("any text")
+
+
+def test_build_user_pref_text_includes_search_type():
+    from apps.shared.enrichment.embed import build_user_pref_text
+    text = build_user_pref_text(
+        search_type="whole_apt_solo",
+        budget_min=1_000_000,
+        budget_max=3_000_000,
+        rooms=2,
+        areas=["Yunusabad", "Chilanzar"],
+        commute_origin="TUIT university",
+        commute_max_minutes=30,
+        commute_mode="public",
+        dealbreakers=["no_first_floor"],
+        tradeoff_hint_text=None,
+        unacceptable_text=None,
+    )
+    assert "whole_apt_solo" in text
+    assert "Yunusabad" in text
+    assert "1000000" in text

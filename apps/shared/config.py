@@ -40,6 +40,10 @@ class Settings(BaseSettings):
 
     enrichment_workers: int = 4
 
+    telegram_bot_token: str = ""
+    telegram_webhook_url: str = ""
+    telegram_webhook_secret: str = ""
+
     @cached_property
     def postgres_dsn(self) -> str:
         return (
