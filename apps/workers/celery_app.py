@@ -55,4 +55,8 @@ app.conf.beat_schedule.update({
         "task": "recheck.listings.active",
         "schedule": crontab(hour=3, minute=0),  # daily 03:00 UTC
     },
+    "purge-dead-bodies": {
+        "task": "purge.listings.dead",
+        "schedule": crontab(hour=4, minute=30),  # daily 04:30 UTC
+    },
 })
