@@ -32,4 +32,3 @@ class Settings(StatesGroup):
     edit_commute_minutes = State()
     edit_commute_mode = State()
     edit_dealbreakers = State()
-    edit_agent_filter = State()

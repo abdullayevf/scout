@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 from aiogram import Router
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -50,7 +50,7 @@ async def start_search_type(message: Message, state: FSMContext) -> None:
     await message.answer(msg.ASK_SEARCH_TYPE, reply_markup=kb.search_type_kb())
 
 
-@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_SEARCH_TYPE}:"))
+@router.callback_query(Onboarding.search_type, lambda c: c.data and c.data.startswith(f"{kb.CB_SEARCH_TYPE}:"))
 async def cb_search_type(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":", 1)[1]
     await state.update_data(search_type=value)
@@ -68,7 +68,7 @@ async def cb_search_type(callback: CallbackQuery, state: FSMContext) -> None:
 # gender_pref
 # ---------------------------------------------------------------------------
 
-@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_GENDER_PREF}:"))
+@router.callback_query(Onboarding.gender_pref, lambda c: c.data and c.data.startswith(f"{kb.CB_GENDER_PREF}:"))
 async def cb_gender_pref(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":", 1)[1]
     await state.update_data(gender_pref=value)
@@ -81,7 +81,7 @@ async def cb_gender_pref(callback: CallbackQuery, state: FSMContext) -> None:
 # budget
 # ---------------------------------------------------------------------------
 
-@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_BUDGET}:"))
+@router.callback_query(Onboarding.budget, lambda c: c.data and c.data.startswith(f"{kb.CB_BUDGET}:"))
 async def cb_budget(callback: CallbackQuery, state: FSMContext) -> None:
     parts = callback.data.split(":")
     if parts[1] == "custom":
@@ -132,7 +132,7 @@ async def cb_rooms(callback: CallbackQuery, state: FSMContext) -> None:
 # areas (multi-select)
 # ---------------------------------------------------------------------------
 
-@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_AREA_TOGGLE}:"))
+@router.callback_query(Onboarding.areas, lambda c: c.data and c.data.startswith(f"{kb.CB_AREA_TOGGLE}:"))
 async def cb_area_toggle(callback: CallbackQuery, state: FSMContext) -> None:
     area = callback.data.split(":", 1)[1]
     data = await state.get_data()
@@ -146,7 +146,7 @@ async def cb_area_toggle(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.callback_query(lambda c: c.data == kb.CB_AREA_CUSTOM)
+@router.callback_query(Onboarding.areas, lambda c: c.data == kb.CB_AREA_CUSTOM)
 async def cb_area_custom(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(_awaiting_custom_area=True)
     await callback.message.answer(msg.ASK_CUSTOM_AREA)
@@ -167,7 +167,7 @@ async def msg_custom_area(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(lambda c: c.data == kb.CB_AREA_DONE)
+@router.callback_query(Onboarding.areas, lambda c: c.data == kb.CB_AREA_DONE)
 async def cb_area_done(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     if not data.get("areas"):
@@ -182,7 +182,7 @@ async def cb_area_done(callback: CallbackQuery, state: FSMContext) -> None:
 # move_in
 # ---------------------------------------------------------------------------
 
-@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_MOVE_IN}:"))
+@router.callback_query(Onboarding.move_in, lambda c: c.data and c.data.startswith(f"{kb.CB_MOVE_IN}:"))
 async def cb_move_in(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":", 1)[1]
     await state.update_data(move_in_window=value)
@@ -196,7 +196,7 @@ async def cb_move_in(callback: CallbackQuery, state: FSMContext) -> None:
 # commute_origin (optional)
 # ---------------------------------------------------------------------------
 
-@router.callback_query(lambda c: c.data == kb.CB_COMMUTE_SKIP)
+@router.callback_query(Onboarding.commute_origin, lambda c: c.data == kb.CB_COMMUTE_SKIP)
 async def cb_commute_skip(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(commute_origin=None)
     await state.set_state(Onboarding.dealbreakers)
@@ -228,7 +228,7 @@ async def msg_commute_origin(message: Message, state: FSMContext) -> None:
 # commute_minutes
 # ---------------------------------------------------------------------------
 
-@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_COMMUTE_MINUTES}:"))
+@router.callback_query(Onboarding.commute_minutes, lambda c: c.data and c.data.startswith(f"{kb.CB_COMMUTE_MINUTES}:"))
 async def cb_commute_minutes(callback: CallbackQuery, state: FSMContext) -> None:
     val = int(callback.data.split(":")[1])
     await state.update_data(commute_max_minutes=val)
@@ -242,7 +242,7 @@ async def cb_commute_minutes(callback: CallbackQuery, state: FSMContext) -> None
 # commute_mode
 # ---------------------------------------------------------------------------
 
-@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_COMMUTE_MODE}:"))
+@router.callback_query(Onboarding.commute_mode, lambda c: c.data and c.data.startswith(f"{kb.CB_COMMUTE_MODE}:"))
 async def cb_commute_mode(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":", 1)[1]
     await state.update_data(commute_mode=value)
@@ -257,7 +257,7 @@ async def cb_commute_mode(callback: CallbackQuery, state: FSMContext) -> None:
 # dealbreakers (multi-select)
 # ---------------------------------------------------------------------------
 
-@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_DB_TOGGLE}:"))
+@router.callback_query(Onboarding.dealbreakers, lambda c: c.data and c.data.startswith(f"{kb.CB_DB_TOGGLE}:"))
 async def cb_dealbreaker_toggle(callback: CallbackQuery, state: FSMContext) -> None:
     key = callback.data.split(":", 1)[1]
     data = await state.get_data()
@@ -273,7 +273,7 @@ async def cb_dealbreaker_toggle(callback: CallbackQuery, state: FSMContext) -> N
     await callback.answer()
 
 
-@router.callback_query(lambda c: c.data == kb.CB_DB_DONE)
+@router.callback_query(Onboarding.dealbreakers, lambda c: c.data == kb.CB_DB_DONE)
 async def cb_dealbreakers_done(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(Onboarding.agent_filter)
     await callback.message.answer(msg.ASK_AGENT_FILTER,
@@ -285,7 +285,7 @@ async def cb_dealbreakers_done(callback: CallbackQuery, state: FSMContext) -> No
 # agent_filter
 # ---------------------------------------------------------------------------
 
-@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_AGENT_FILTER}:"))
+@router.callback_query(Onboarding.agent_filter, lambda c: c.data and c.data.startswith(f"{kb.CB_AGENT_FILTER}:"))
 async def cb_agent_filter(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":", 1)[1]
     await state.update_data(agent_filter=value)
@@ -309,7 +309,7 @@ async def cb_agent_filter(callback: CallbackQuery, state: FSMContext) -> None:
 # axis_priority (iterates on itself until pending_axes is empty)
 # ---------------------------------------------------------------------------
 
-@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_AXIS}:"))
+@router.callback_query(Onboarding.axis_priority, lambda c: c.data and c.data.startswith(f"{kb.CB_AXIS}:"))
 async def cb_axis_priority(callback: CallbackQuery, state: FSMContext) -> None:
     _, priority, axis_key = callback.data.split(":")
     data = await state.get_data()
@@ -335,7 +335,7 @@ async def cb_axis_priority(callback: CallbackQuery, state: FSMContext) -> None:
 # free_text_wall
 # ---------------------------------------------------------------------------
 
-@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_FREE_TEXT_WALL}:"))
+@router.callback_query(Onboarding.free_text_wall, lambda c: c.data and c.data.startswith(f"{kb.CB_FREE_TEXT_WALL}:"))
 async def cb_free_text_wall(callback: CallbackQuery, state: FSMContext) -> None:
     choice = callback.data.split(":")[1]
     if choice == "skip":
@@ -371,7 +371,7 @@ async def msg_free_text_3(message: Message, state: FSMContext) -> None:
     await _trigger_done(message, state)
 
 
-@router.callback_query(lambda c: c.data == kb.CB_FREE_TEXT_SKIP)
+@router.callback_query(StateFilter(Onboarding.free_text_1, Onboarding.free_text_2, Onboarding.free_text_3), lambda c: c.data == kb.CB_FREE_TEXT_SKIP)
 async def cb_free_text_skip(callback: CallbackQuery, state: FSMContext) -> None:
     current = await state.get_state()
     if current == Onboarding.free_text_1:

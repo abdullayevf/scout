@@ -47,7 +47,7 @@ def _write_event(kind: str, user_id: int | None) -> None:
 async def require_active_user(message: Message) -> bool:
     loop = asyncio.get_running_loop()
     user = await loop.run_in_executor(None, _get_user, message.from_user.id)
-    if user is None or user.state == UserState.DELETED:
+    if user is None or user.state in (UserState.DELETED, UserState.ONBOARDING):
         await message.answer(msg.NOT_ONBOARDED)
         return False
     return True
@@ -70,7 +70,7 @@ async def cmd_help(message: Message) -> None:
 async def cmd_pause(message: Message) -> None:
     loop = asyncio.get_running_loop()
     user = await loop.run_in_executor(None, _get_user, message.from_user.id)
-    if user is None or user.state == UserState.DELETED:
+    if user is None or user.state in (UserState.DELETED, UserState.ONBOARDING):
         await message.answer(msg.NOT_ONBOARDED)
         return
     if user.state == UserState.PAUSED:
@@ -90,7 +90,7 @@ async def cmd_pause(message: Message) -> None:
 async def cmd_resume(message: Message) -> None:
     loop = asyncio.get_running_loop()
     user = await loop.run_in_executor(None, _get_user, message.from_user.id)
-    if user is None or user.state == UserState.DELETED:
+    if user is None or user.state in (UserState.DELETED, UserState.ONBOARDING):
         await message.answer(msg.NOT_ONBOARDED)
         return
     if user.state != UserState.PAUSED:
