@@ -1,5 +1,5 @@
 from celery import Celery
-from celery.schedules import crontab  # noqa: F401
+from celery.schedules import crontab
 
 from apps.shared.config import settings
 
@@ -50,5 +50,9 @@ app.conf.beat_schedule.update({
         "task": "enrich.listings.pending",
         "schedule": 60,  # every minute
         "args": (),
+    },
+    "recheck-active": {
+        "task": "recheck.listings.active",
+        "schedule": crontab(hour=3, minute=0),  # daily 03:00 UTC
     },
 })
