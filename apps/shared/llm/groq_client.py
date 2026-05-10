@@ -25,15 +25,16 @@ class GroqClient:
         reraise=True,
     )
     def generate_json(self, prompt: str, schema: dict[str, Any]) -> dict[str, Any]:
+        schema_hint = json.dumps(schema.get("properties", {}), ensure_ascii=False)
+        full_prompt = (
+            f"{prompt}\n\nRespond with a JSON object matching these fields:\n{schema_hint}"
+        )
         resp = self._client.post(
             "/chat/completions",
             json={
                 "model": self._model,
-                "messages": [{"role": "user", "content": prompt}],
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {"name": "output", "schema": schema, "strict": False},
-                },
+                "messages": [{"role": "user", "content": full_prompt}],
+                "response_format": {"type": "json_object"},
                 "temperature": 0.1,
             },
         )

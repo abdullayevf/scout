@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     embedding_dim: int = 3072
 
     groq_api_key: str = ""
-    groq_model: str = "llama-3.1-70b-versatile"
+    groq_model: str = "llama-3.3-70b-versatile"
 
     yandex_geocode_api_key: str
     yandex_routing_api_key: str
