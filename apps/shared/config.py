@@ -23,8 +23,8 @@ class Settings(BaseSettings):
 
     google_api_key: str
     gemini_model: str = "gemini-2.5-flash"
-    gemini_embed_model: str = "text-embedding-004"
-    embedding_dim: int = 768
+    gemini_embed_model: str = "models/gemini-embedding-001"
+    embedding_dim: int = 3072
 
     yandex_geocode_api_key: str
     yandex_routing_api_key: str
