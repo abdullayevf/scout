@@ -16,16 +16,16 @@ log = logging.getLogger(__name__)
 
 CATEGORY_URLS: dict[str, str] = {
     OlxCategory.LONG_TERM: (
-        "https://www.olx.uz/nedvizhimost/dolgosrochnaya-arenda-kvartir/tashkent/"
+        "https://www.olx.uz/nedvizhimost/kvartiry/arenda-dolgosrochnaya/"
     ),
     OlxCategory.ROOMS: (
-        "https://www.olx.uz/nedvizhimost/arenda-komnat/tashkent/"
+        "https://www.olx.uz/nedvizhimost/komnaty/"
     ),
     OlxCategory.DAILY: (
-        "https://www.olx.uz/nedvizhimost/posutochno-pochasovo/tashkent/"
+        "https://www.olx.uz/nedvizhimost/kvartiry/arenda-kratkosrochnaya/"
     ),
     OlxCategory.LOOKING_FOR: (
-        "https://www.olx.uz/nedvizhimost/snimu/tashkent/"
+        "https://www.olx.uz/nedvizhimost/snimu/"
     ),
 }
 
