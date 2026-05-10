@@ -44,3 +44,11 @@ app.conf.beat_schedule = {
     },
     # daily category disabled by default; enable per user demand later
 }
+
+app.conf.beat_schedule.update({
+    "enrich-pending": {
+        "task": "enrich.listings.pending",
+        "schedule": 60,  # every minute
+        "args": (),
+    },
+})
