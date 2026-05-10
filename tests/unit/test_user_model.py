@@ -1,7 +1,8 @@
 import pytest
-from sqlalchemy import inspect, text
-from apps.shared.models import Base, User, Event
+from sqlalchemy import inspect
+
 from apps.shared.enums import UserState
+from apps.shared.models import Base, Event, User
 
 
 def test_user_table_exists(engine):
@@ -16,8 +17,8 @@ def test_event_table_exists(engine):
     assert "events" in insp.get_table_names()
 
 
-def test_user_create_minimal(db_session):
-    Base.metadata.create_all(db_session.bind)
+def test_user_create_minimal(engine, db_session):
+    Base.metadata.create_all(engine)
     u = User(tg_user_id=111, state=UserState.ONBOARDING)
     db_session.add(u)
     db_session.flush()
@@ -25,9 +26,9 @@ def test_user_create_minimal(db_session):
     assert u.state == "onboarding"
 
 
-def test_user_tg_user_id_unique(db_session):
+def test_user_tg_user_id_unique(engine, db_session):
     from sqlalchemy.exc import IntegrityError
-    Base.metadata.create_all(db_session.bind)
+    Base.metadata.create_all(engine)
     db_session.add(User(tg_user_id=222, state=UserState.ONBOARDING))
     db_session.flush()
     db_session.add(User(tg_user_id=222, state=UserState.ONBOARDING))
@@ -35,8 +36,8 @@ def test_user_tg_user_id_unique(db_session):
         db_session.flush()
 
 
-def test_event_create(db_session):
-    Base.metadata.create_all(db_session.bind)
+def test_event_create(engine, db_session):
+    Base.metadata.create_all(engine)
     e = Event(kind="onboarding_started", user_id=333)
     db_session.add(e)
     db_session.flush()
