@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 import httpx
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from apps.shared.db import session_scope
 from apps.shared.models import GeocodeCache
@@ -58,13 +59,16 @@ def geocode(query: str) -> GeocodeResult:
             matched_text=obj["metaDataProperty"]["GeocoderMetaData"]["text"],
         )
     with session_scope() as s:
-        s.add(
-            GeocodeCache(
+        stmt = (
+            pg_insert(GeocodeCache)
+            .values(
                 query_norm=norm,
                 lat=result.lat,
                 lng=result.lng,
                 matched_text=result.matched_text,
                 raw_response=data,
             )
+            .on_conflict_do_nothing(index_elements=["query_norm"])
         )
+        s.execute(stmt)
     return result
