@@ -1,0 +1,39 @@
+[project]
+name = "scout"
+version = "0.0.1"
+description = "AI apartment hunter for Tashkent"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "aiogram>=3.13",
+  "celery[redis]>=5.4",
+  "redis>=5.2",
+  "sqlalchemy>=2.0",
+  "alembic>=1.13",
+  "psycopg[binary]>=3.2",
+  "pgvector>=0.3",
+  "httpx>=0.28",
+  "selectolax>=0.3.27",
+  "playwright>=1.49",
+  "pillow>=11",
+  "imagehash>=4.3",
+  "pydantic>=2.10",
+  "pydantic-settings>=2.6",
+  "tenacity>=9",
+  "python-dotenv>=1.0",
+  "google-genai>=0.3",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "respx>=0.21",
+  "testcontainers[postgres]>=4.8",
+  "ruff>=0.7",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
