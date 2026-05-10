@@ -1122,7 +1122,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
     { name = "celery", extras = ["redis"], specifier = ">=5.4" },
     { name = "fastapi", specifier = ">=0.115" },
-    { name = "google-genai", specifier = ">=0.3" },
+    { name = "google-genai", specifier = ">=1.0" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "imagehash", specifier = ">=4.3" },
     { name = "pgvector", specifier = ">=0.3" },
