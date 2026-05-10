@@ -395,9 +395,7 @@ async def _trigger_done(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.clear()
     await message.answer(msg.BUILDING_PROFILE)
-    coro = _build_profile_async(message, data)
-    if asyncio.iscoroutine(coro):
-        asyncio.create_task(coro)
+    asyncio.create_task(_build_profile_async(message, data))
 
 
 async def _build_profile_async(message: Message, data: dict) -> None:
