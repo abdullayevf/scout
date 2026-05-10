@@ -127,3 +127,19 @@ async def test_reonboard_confirm_clears_state():
 def test_settings_router_importable():
     from apps.bot.handlers.settings import router
     assert router is not None
+
+
+def test_bot_main_has_dispatcher():
+    import importlib, sys
+    from unittest.mock import patch, MagicMock
+    # Patch settings so the import doesn't fail on empty token
+    mock_settings = MagicMock()
+    mock_settings.telegram_bot_token = "123456789:AAFakeTokenForTestingOnly123456789"
+    mock_settings.telegram_webhook_url = "https://example.com/bot/webhook"
+    mock_settings.telegram_webhook_secret = ""
+    mock_settings.redis_url = "redis://localhost:6379/0"
+    sys.modules.pop("apps.bot.main", None)
+    with patch("apps.shared.config.settings", mock_settings):
+        mod = importlib.import_module("apps.bot.main")
+        assert hasattr(mod, "dp")
+        assert hasattr(mod, "main")
