@@ -1,0 +1,11 @@
+{
+  "search_type": "whole_apt_solo",
+  "gender_constraint": "any",
+  "is_furnished": true,
+  "has_parking": false,
+  "is_first_floor": false,
+  "bathroom_type": "private",
+  "poster_role": "owner",
+  "agent_fee_text": null,
+  "summary_one_line": "Двухкомнатная в Юнусабаде, с мебелью, рядом метро."
+}
