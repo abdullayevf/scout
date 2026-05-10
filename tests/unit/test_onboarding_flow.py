@@ -103,3 +103,86 @@ async def test_commute_origin_text_geocodes_and_advances():
     assert state == Onboarding.commute_minutes
     assert data["commute_origin"] == "TUIT university"
     assert data["commute_origin_lat"] == 41.3
+
+
+@pytest.mark.asyncio
+async def test_dealbreakers_done_advances_to_agent_filter():
+    from apps.bot.handlers.onboarding import cb_dealbreakers_done
+    cb = make_cb("db_done")
+    ctx = await make_ctx()
+    await ctx.set_state(Onboarding.dealbreakers)
+    await ctx.update_data(dealbreakers=[])
+    await cb_dealbreakers_done(cb, ctx)
+    state = await ctx.get_state()
+    assert state == Onboarding.agent_filter
+
+
+@pytest.mark.asyncio
+async def test_axis_priority_iterates_then_stays():
+    from apps.bot.handlers.onboarding import cb_axis_priority
+    cb = make_cb("axis:must:budget")
+    ctx = await make_ctx()
+    await ctx.set_state(Onboarding.axis_priority)
+    await ctx.update_data(
+        axis_priority={},
+        pending_axes=["budget", "area"],
+    )
+    await cb_axis_priority(cb, ctx)
+    data = await ctx.get_data()
+    assert data["axis_priority"]["budget"] == "MUST"
+    assert data["pending_axes"] == ["area"]
+    state = await ctx.get_state()
+    assert state == Onboarding.axis_priority
+
+
+@pytest.mark.asyncio
+async def test_axis_priority_last_axis_advances_to_free_text_wall():
+    from apps.bot.handlers.onboarding import cb_axis_priority
+    cb = make_cb("axis:nice:area")
+    ctx = await make_ctx()
+    await ctx.set_state(Onboarding.axis_priority)
+    await ctx.update_data(axis_priority={"budget": "MUST"}, pending_axes=["area"])
+    await cb_axis_priority(cb, ctx)
+    state = await ctx.get_state()
+    assert state == Onboarding.free_text_wall
+
+
+@pytest.mark.asyncio
+async def test_free_text_wall_skip_triggers_build():
+    from apps.bot.handlers.onboarding import cb_free_text_wall
+    cb = make_cb("ftw:skip")
+    ctx = await make_ctx()
+    await ctx.set_state(Onboarding.free_text_wall)
+    await ctx.update_data(
+        search_type="whole_apt_solo",
+        budget_min=0,
+        budget_max=3_000_000,
+        rooms=2,
+        areas=["Yunusabad"],
+        move_in_window="now",
+        commute_origin=None,
+        dealbreakers=[],
+        agent_filter="owner_only",
+        axis_priority={"budget": "MUST"},
+        gender_pref=None,
+    )
+    with patch("apps.bot.handlers.onboarding._build_profile_async") as build_mock:
+        build_mock.return_value = None
+        await cb_free_text_wall(cb, ctx)
+    build_mock.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_free_text_3_skip_triggers_done():
+    from apps.bot.handlers.onboarding import cb_free_text_skip
+    cb = make_cb("fts")
+    ctx = await make_ctx()
+    await ctx.set_state(Onboarding.free_text_3)
+    await ctx.update_data(
+        search_type="whole_apt_solo", budget_min=0, budget_max=3_000_000,
+        rooms=None, areas=["Yunusabad"], move_in_window="flexible",
+        commute_origin=None, dealbreakers=[], agent_filter="agents_ok",
+        axis_priority={}, gender_pref=None,
+    )
+    with patch("apps.bot.handlers.onboarding._build_profile_async"):
+        await cb_free_text_skip(cb, ctx)

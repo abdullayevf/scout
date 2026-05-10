@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, Message
 
 from apps.bot import keyboards as kb
 from apps.bot import messages as msg
+from apps.bot.keyboards import AXIS_LABELS
 from apps.bot.states import Onboarding
 from apps.shared.geo.yandex import GeocodeResult, geocode
 
@@ -250,3 +251,252 @@ async def cb_commute_mode(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.answer(msg.ASK_DEALBREAKERS,
                                   reply_markup=kb.dealbreakers_kb([]))
     await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# dealbreakers (multi-select)
+# ---------------------------------------------------------------------------
+
+@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_DB_TOGGLE}:"))
+async def cb_dealbreaker_toggle(callback: CallbackQuery, state: FSMContext) -> None:
+    key = callback.data.split(":", 1)[1]
+    data = await state.get_data()
+    selected: list[str] = list(data.get("dealbreakers", []))
+    if key in selected:
+        selected.remove(key)
+    else:
+        selected.append(key)
+    await state.update_data(dealbreakers=selected)
+    await callback.message.edit_reply_markup(
+        reply_markup=kb.dealbreakers_kb(selected)
+    )
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == kb.CB_DB_DONE)
+async def cb_dealbreakers_done(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(Onboarding.agent_filter)
+    await callback.message.answer(msg.ASK_AGENT_FILTER,
+                                  reply_markup=kb.agent_filter_kb())
+    await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# agent_filter
+# ---------------------------------------------------------------------------
+
+@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_AGENT_FILTER}:"))
+async def cb_agent_filter(callback: CallbackQuery, state: FSMContext) -> None:
+    value = callback.data.split(":", 1)[1]
+    await state.update_data(agent_filter=value)
+    data = await state.get_data()
+    axes = ["budget", "area"]
+    if data.get("commute_origin"):
+        axes.append("commute")
+    axes += ["rooms", "furnishing"]
+    await state.update_data(axis_priority={}, pending_axes=axes)
+    await state.set_state(Onboarding.axis_priority)
+    first_axis = axes[0]
+    label = AXIS_LABELS[first_axis]
+    await callback.message.answer(
+        msg.ASK_AXIS_PRIORITY.format(axis=label),
+        reply_markup=kb.axis_priority_kb(first_axis),
+    )
+    await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# axis_priority (iterates on itself until pending_axes is empty)
+# ---------------------------------------------------------------------------
+
+@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_AXIS}:"))
+async def cb_axis_priority(callback: CallbackQuery, state: FSMContext) -> None:
+    _, priority, axis_key = callback.data.split(":")
+    data = await state.get_data()
+    axis_priority: dict = dict(data.get("axis_priority", {}))
+    axis_priority[axis_key] = priority.upper()
+    pending: list[str] = [a for a in data.get("pending_axes", []) if a != axis_key]
+    await state.update_data(axis_priority=axis_priority, pending_axes=pending)
+    if pending:
+        next_axis = pending[0]
+        label = AXIS_LABELS[next_axis]
+        await callback.message.answer(
+            msg.ASK_AXIS_PRIORITY.format(axis=label),
+            reply_markup=kb.axis_priority_kb(next_axis),
+        )
+    else:
+        await state.set_state(Onboarding.free_text_wall)
+        await callback.message.answer(msg.FREE_TEXT_WALL,
+                                      reply_markup=kb.free_text_wall_kb())
+    await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# free_text_wall
+# ---------------------------------------------------------------------------
+
+@router.callback_query(lambda c: c.data and c.data.startswith(f"{kb.CB_FREE_TEXT_WALL}:"))
+async def cb_free_text_wall(callback: CallbackQuery, state: FSMContext) -> None:
+    choice = callback.data.split(":")[1]
+    if choice == "skip":
+        await _trigger_done(callback.message, state)
+    else:
+        await state.set_state(Onboarding.free_text_1)
+        await callback.message.answer(msg.FREE_TEXT_1,
+                                      reply_markup=kb.free_text_skip_kb())
+    await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# free_text_1 / 2 / 3 — text input or skip
+# ---------------------------------------------------------------------------
+
+@router.message(Onboarding.free_text_1)
+async def msg_free_text_1(message: Message, state: FSMContext) -> None:
+    await state.update_data(tradeoff_hint_text=message.text.strip())
+    await state.set_state(Onboarding.free_text_2)
+    await message.answer(msg.FREE_TEXT_2, reply_markup=kb.free_text_skip_kb())
+
+
+@router.message(Onboarding.free_text_2)
+async def msg_free_text_2(message: Message, state: FSMContext) -> None:
+    await state.update_data(unacceptable_text=message.text.strip())
+    await state.set_state(Onboarding.free_text_3)
+    await message.answer(msg.FREE_TEXT_3, reply_markup=kb.free_text_skip_kb())
+
+
+@router.message(Onboarding.free_text_3)
+async def msg_free_text_3(message: Message, state: FSMContext) -> None:
+    await state.update_data(instant_reject_text=message.text.strip())
+    await _trigger_done(message, state)
+
+
+@router.callback_query(lambda c: c.data == kb.CB_FREE_TEXT_SKIP)
+async def cb_free_text_skip(callback: CallbackQuery, state: FSMContext) -> None:
+    current = await state.get_state()
+    if current == Onboarding.free_text_1:
+        await state.set_state(Onboarding.free_text_2)
+        await callback.message.answer(msg.FREE_TEXT_2,
+                                      reply_markup=kb.free_text_skip_kb())
+    elif current == Onboarding.free_text_2:
+        await state.set_state(Onboarding.free_text_3)
+        await callback.message.answer(msg.FREE_TEXT_3,
+                                      reply_markup=kb.free_text_skip_kb())
+    else:
+        await _trigger_done(callback.message, state)
+    await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# DONE — background profile build
+# ---------------------------------------------------------------------------
+
+async def _trigger_done(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.clear()
+    await message.answer(msg.BUILDING_PROFILE)
+    coro = _build_profile_async(message, data)
+    if asyncio.iscoroutine(coro):
+        asyncio.create_task(coro)
+
+
+async def _build_profile_async(message: Message, data: dict) -> None:
+    loop = asyncio.get_running_loop()
+    tg_user_id = message.from_user.id
+    tg_username = getattr(message.from_user, "username", None)
+
+    from apps.shared.llm.gemini import GeminiClient
+    from apps.shared.enrichment.embed import build_user_pref_text
+    from apps.shared.db import session_scope
+    from apps.shared.models import User, Event
+    from apps.shared.enums import UserState
+    from sqlalchemy import select
+    from datetime import UTC, datetime
+
+    gemini = GeminiClient()
+
+    # 1. Extract dealbreaker keywords from instant_reject_text
+    dealbreaker_keywords: list[str] = []
+    instant_reject = data.get("instant_reject_text")
+    if instant_reject:
+        try:
+            schema = {
+                "type": "object",
+                "properties": {
+                    "keywords": {"type": "array", "items": {"type": "string"}}
+                },
+                "required": ["keywords"],
+            }
+            prompt = (
+                f"Extract short rejection keywords from this apartment search note. "
+                f"Return a JSON list of strings (1-3 words each, Russian).\n\n{instant_reject}"
+            )
+            result = await loop.run_in_executor(
+                None, lambda: gemini.generate_json(prompt, schema)
+            )
+            dealbreaker_keywords = result.get("keywords", [])
+        except Exception:
+            log.warning("Keyword extraction failed; continuing without keywords")
+
+    # 2. Build preference embedding
+    pref_text = build_user_pref_text(
+        search_type=data.get("search_type"),
+        budget_min=data.get("budget_min"),
+        budget_max=data.get("budget_max"),
+        rooms=data.get("rooms"),
+        areas=data.get("areas", []),
+        commute_origin=data.get("commute_origin"),
+        commute_max_minutes=data.get("commute_max_minutes"),
+        commute_mode=data.get("commute_mode"),
+        dealbreakers=data.get("dealbreakers", []),
+        tradeoff_hint_text=data.get("tradeoff_hint_text"),
+        unacceptable_text=data.get("unacceptable_text"),
+    )
+    embedding: list[float] | None = None
+    try:
+        embedding = await loop.run_in_executor(None, gemini.embed, pref_text)
+    except Exception:
+        log.warning("Embedding build failed; user marked active with null embedding")
+
+    # 3. Upsert User row
+    def _upsert(u_data: dict, keywords: list[str], emb: list[float] | None) -> None:
+        with session_scope() as s:
+            row = s.execute(
+                select(User).where(User.tg_user_id == u_data["tg_user_id"])
+            ).scalar_one_or_none()
+            if row is None:
+                row = User(tg_user_id=u_data["tg_user_id"])
+                s.add(row)
+            row.tg_username = u_data.get("tg_username")
+            row.search_type = u_data.get("search_type")
+            row.gender_pref = u_data.get("gender_pref")
+            row.agent_filter = u_data.get("agent_filter")
+            row.budget_min = u_data.get("budget_min")
+            row.budget_max = u_data.get("budget_max")
+            row.rooms = u_data.get("rooms")
+            row.areas = u_data.get("areas", [])
+            row.move_in_window = u_data.get("move_in_window")
+            row.commute_origin = u_data.get("commute_origin")
+            row.commute_origin_lat = u_data.get("commute_origin_lat")
+            row.commute_origin_lng = u_data.get("commute_origin_lng")
+            row.commute_max_minutes = u_data.get("commute_max_minutes")
+            row.commute_mode = u_data.get("commute_mode")
+            row.dealbreakers = u_data.get("dealbreakers", [])
+            row.dealbreaker_keywords = keywords
+            row.axis_priority = u_data.get("axis_priority", {})
+            row.tradeoff_hint_text = u_data.get("tradeoff_hint_text")
+            row.unacceptable_text = u_data.get("unacceptable_text")
+            row.instant_reject_text = u_data.get("instant_reject_text")
+            row.preference_embedding = emb
+            row.state = UserState.ACTIVE
+            row.onboarded_at = datetime.now(UTC)
+            s.add(Event(kind="onboarding_completed", user_id=row.tg_user_id))
+
+    await loop.run_in_executor(
+        None,
+        _upsert,
+        {"tg_user_id": tg_user_id, "tg_username": tg_username, **data},
+        dealbreaker_keywords,
+        embedding,
+    )
+    await message.answer(msg.ONBOARDING_DONE)
