@@ -15,7 +15,7 @@ def test_settings_loads_from_env(monkeypatch):
     s = Settings()
     assert s.postgres_dsn == "postgresql+psycopg://u:p@db.example:6543/x"
     assert s.redis_url == "redis://r:1/0"
-    assert s.embedding_dim == 768
+    assert s.embedding_dim == 3072
 
 
 def test_telegram_fields_present():
