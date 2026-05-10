@@ -25,6 +25,7 @@ from apps.shared.enums import (  # noqa: F401
     OlxCategory,
     PosterRole,
     SearchType,
+    UserState,
 )
 
 
@@ -151,3 +152,70 @@ class ScrapeRunHealth(Base):
     success_count: Mapped[int] = mapped_column(Integer)
     failure_count: Mapped[int] = mapped_column(Integer)
     used_playwright_fallback: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tg_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
+    tg_username: Mapped[str | None] = mapped_column(Text)
+
+    search_type: Mapped[str | None] = mapped_column(String(32))
+    gender_pref: Mapped[str | None] = mapped_column(String(8))
+    agent_filter: Mapped[str | None] = mapped_column(String(16))
+    budget_min: Mapped[int | None] = mapped_column(BigInteger)
+    budget_max: Mapped[int | None] = mapped_column(BigInteger)
+    rooms: Mapped[int | None] = mapped_column(Integer)
+    areas: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    move_in_window: Mapped[str | None] = mapped_column(String(16))
+
+    commute_origin: Mapped[str | None] = mapped_column(Text)
+    commute_origin_lat: Mapped[float | None] = mapped_column(Float)
+    commute_origin_lng: Mapped[float | None] = mapped_column(Float)
+    commute_max_minutes: Mapped[int | None] = mapped_column(Integer)
+    commute_mode: Mapped[str | None] = mapped_column(String(8))
+
+    dealbreakers: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    dealbreaker_keywords: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    axis_priority: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+    tradeoff_hint_text: Mapped[str | None] = mapped_column(Text)
+    unacceptable_text: Mapped[str | None] = mapped_column(Text)
+    instant_reject_text: Mapped[str | None] = mapped_column(Text)
+    preference_embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(settings.embedding_dim)
+    )
+
+    negative_area_mask: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    distrust_set: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    seen_set: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), default=list)
+    top_1pct_threshold: Mapped[float | None] = mapped_column(Float)
+
+    state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=UserState.ONBOARDING, index=True
+    )
+    paused_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    onboarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Event(Base):
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    ts: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    user_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
+    listing_id: Mapped[int | None] = mapped_column(BigInteger)
+    match_id: Mapped[int | None] = mapped_column(BigInteger)
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict)

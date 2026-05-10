@@ -37,3 +37,11 @@ class PosterRole(StrEnum):
     OWNER = "owner"
     AGENT = "agent"
     UNKNOWN = "unknown"
+
+
+class UserState(StrEnum):
+    ONBOARDING = "onboarding"
+    ACTIVE = "active"
+    PAUSED = "paused"
+    SUCCESS = "success"
+    DELETED = "deleted"
