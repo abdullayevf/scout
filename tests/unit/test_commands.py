@@ -122,3 +122,8 @@ async def test_reonboard_confirm_clears_state():
          patch("apps.bot.handlers.onboarding.start_search_type"):
         await cb_reonboard_yes(cb, ctx)
         reset_mock.assert_called_once_with(user)
+
+
+def test_settings_router_importable():
+    from apps.bot.handlers.settings import router
+    assert router is not None
