@@ -22,9 +22,12 @@ class Settings(BaseSettings):
     redis_url: str
 
     google_api_key: str
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-2.0-flash"
     gemini_embed_model: str = "models/gemini-embedding-001"
     embedding_dim: int = 3072
+
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.1-70b-versatile"
 
     yandex_geocode_api_key: str
     yandex_routing_api_key: str

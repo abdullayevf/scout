@@ -11,6 +11,7 @@ from apps.shared.enrichment.classify import classify_listing
 from apps.shared.enums import ListingState, PosterRole
 from apps.shared.geo.yandex import geocode
 from apps.shared.llm.gemini import GeminiClient
+from apps.shared.llm.groq_client import GroqClient
 from apps.shared.models import Listing
 from apps.shared.phone import hash_phone, normalize_phone
 from apps.shared.scraping.playwright_phone import PhoneRevealer
@@ -22,7 +23,8 @@ AGENT_KEYWORDS = ("посредник", "комисси", "агент", "vositac
 
 
 def _enrich_one(listing_id: int) -> dict:
-    llm = GeminiClient()
+    llm = GroqClient()       # generation: classify + translate
+    gemini = GeminiClient()  # embeddings only
     with session_scope() as s:
         row = s.get(Listing, listing_id)
         if row is None or row.state != ListingState.PENDING_ENRICH:
@@ -154,7 +156,7 @@ def _enrich_one(listing_id: int) -> dict:
             has_parking=row.has_parking,
             bathroom_type=row.bathroom_type,
         )
-        row.embedding = embed.embed_listing(emb_text, llm=llm)
+        row.embedding = embed.embed_listing(emb_text, llm=gemini)
 
         # 10. flip state
         row.state = ListingState.ACTIVE
