@@ -1,0 +1,16 @@
+{
+  "response": {
+    "GeoObjectCollection": {
+      "featureMember": [
+        {
+          "GeoObject": {
+            "Point": {"pos": "69.282671 41.366776"},
+            "metaDataProperty": {
+              "GeocoderMetaData": {"text": "Узбекистан, Ташкент, Юнусабадский район"}
+            }
+          }
+        }
+      ]
+    }
+  }
+}
