@@ -1,0 +1,37 @@
+# git
+.git
+.gitignore
+.gitattributes
+
+# python build / venv / caches
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist
+build
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# editor / OS
+.idea
+.vscode
+.DS_Store
+
+# environment & local data
+.env
+.env.local
+data
+images
+
+# project meta — not needed in the image
+README.md
+docs
+ccswitch.sh
+
+# Docker metadata itself
+Dockerfile
+docker-compose.yml
+.dockerignore

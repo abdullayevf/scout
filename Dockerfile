@@ -11,9 +11,8 @@ RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml uv.lock* ./
 RUN uv sync --frozen --no-dev || uv sync --no-dev
+RUN uv run playwright install --with-deps chromium
 
 COPY . .
-
-RUN uv run playwright install --with-deps chromium
 
 ENV PATH="/app/.venv/bin:$PATH"
