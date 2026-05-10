@@ -21,8 +21,8 @@ def test_geocode_caches_result(engine, monkeypatch):
     )
     monkeypatch.setenv("YANDEX_GEOCODE_API_KEY", "test")
 
-    r1 = geocode("Юнусабадский район, Ташкент")
-    r2 = geocode("Юнусабадский район, Ташкент")
+    r1 = geocode("Юнусабадский район тест, Ташкент")
+    r2 = geocode("Юнусабадский район тест, Ташкент")
     assert r1.lat == r2.lat == 41.366776
     assert r1.lng == r2.lng == 69.282671
     assert route.call_count == 1  # cache hit on second call
