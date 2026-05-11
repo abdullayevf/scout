@@ -334,9 +334,11 @@ async def test_build_profile_uses_zero_vector_on_embed_failure():
     fake_loop = MagicMock()
     fake_loop.run_in_executor = fake_run_in_executor
 
+    from_user = MagicMock(id=999, username="t")
+
     with patch("apps.shared.llm.gemini.GeminiClient", FakeGemini), \
          patch("asyncio.get_running_loop", return_value=fake_loop):
-        await onboarding._build_profile_async(message, data)
+        await onboarding._build_profile_async(message, from_user, data)
 
     assert len(captured_emb) == 1, f"Expected 1 captured embedding, got {len(captured_emb)}"
     emb = captured_emb[0]

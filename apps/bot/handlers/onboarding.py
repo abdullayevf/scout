@@ -363,7 +363,7 @@ async def cb_axis_priority(callback: CallbackQuery, state: FSMContext) -> None:
 async def cb_free_text_wall(callback: CallbackQuery, state: FSMContext) -> None:
     choice = callback.data.split(":")[1]
     if choice == "skip":
-        await _trigger_done(callback.message, state)
+        await _trigger_done(callback.message, callback.from_user, state)
     else:
         await state.set_state(Onboarding.free_text_1)
         await callback.message.answer(msg.FREE_TEXT_1,
@@ -392,7 +392,7 @@ async def msg_free_text_2(message: Message, state: FSMContext) -> None:
 @router.message(Onboarding.free_text_3)
 async def msg_free_text_3(message: Message, state: FSMContext) -> None:
     await state.update_data(instant_reject_text=message.text.strip())
-    await _trigger_done(message, state)
+    await _trigger_done(message, message.from_user, state)
 
 
 @router.callback_query(StateFilter(Onboarding.free_text_1, Onboarding.free_text_2, Onboarding.free_text_3), lambda c: c.data == kb.CB_FREE_TEXT_SKIP)
@@ -407,7 +407,7 @@ async def cb_free_text_skip(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.message.answer(msg.FREE_TEXT_3,
                                       reply_markup=kb.free_text_skip_kb())
     else:
-        await _trigger_done(callback.message, state)
+        await _trigger_done(callback.message, callback.from_user, state)
     await callback.answer()
 
 
@@ -415,17 +415,17 @@ async def cb_free_text_skip(callback: CallbackQuery, state: FSMContext) -> None:
 # DONE — background profile build
 # ---------------------------------------------------------------------------
 
-async def _trigger_done(message: Message, state: FSMContext) -> None:
+async def _trigger_done(message: Message, from_user, state: FSMContext) -> None:
     data = await state.get_data()
     await state.clear()
     await message.answer(msg.BUILDING_PROFILE)
-    asyncio.create_task(_build_profile_async(message, data))
+    asyncio.create_task(_build_profile_async(message, from_user, data))
 
 
-async def _build_profile_async(message: Message, data: dict) -> None:
+async def _build_profile_async(message: Message, from_user, data: dict) -> None:
     loop = asyncio.get_running_loop()
-    tg_user_id = message.from_user.id
-    tg_username = getattr(message.from_user, "username", None)
+    tg_user_id = from_user.id
+    tg_username = getattr(from_user, "username", None)
 
     from apps.shared.llm.gemini import GeminiClient
     from apps.shared.enrichment.embed import build_user_pref_text
