@@ -22,6 +22,10 @@ log = logging.getLogger(__name__)
 
 @app.task(name="match.fanout.listing", bind=True, max_retries=2, default_retry_delay=60)
 def match_fanout_listing(self, listing_id: int) -> dict:
+    pending_alerts: list[int] = []
+    n_candidates = 0
+    n_inserted = 0
+
     with session_scope() as s:
         listing = s.get(Listing, listing_id)
         if listing is None or listing.state != ListingState.ACTIVE:
@@ -32,7 +36,7 @@ def match_fanout_listing(self, listing_id: int) -> dict:
             return {"ok": False, "reason": "canonical pointer"}
 
         candidates = sql_filter_candidates(s, listing)
-        inserted = 0
+        n_candidates = len(candidates)
         for user in candidates:
             if not python_filter_pass(user, listing):
                 continue
@@ -46,11 +50,16 @@ def match_fanout_listing(self, listing_id: int) -> dict:
             )
             s.add(m)
             s.flush()
-            inserted += 1
+            n_inserted += 1
             threshold = user.top_1pct_threshold or 999.0
             if score >= threshold and not is_cold_start(s, user):
-                match_alert_instant.delay(m.id)
-        return {"ok": True, "candidates": len(candidates), "inserted": inserted}
+                pending_alerts.append(m.id)
+
+    # Dispatch AFTER session commits — match rows are now visible.
+    for mid in pending_alerts:
+        match_alert_instant.delay(mid)
+
+    return {"ok": True, "candidates": n_candidates, "inserted": n_inserted}
 
 
 @app.task(name="match.alert.instant", bind=True, max_retries=2, default_retry_delay=60)
