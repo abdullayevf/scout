@@ -1,0 +1,159 @@
+"""Match fanout, instant alerts, threshold recompute, dead cleanup."""
+
+import logging
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import func, select, update
+
+from apps.shared.db import session_scope
+from apps.shared.enums import (
+    DeliveredVia, ListingState, MatchState, UserState,
+)
+from apps.shared.matching import config as cfg
+from apps.shared.matching.coldstart import is_cold_start
+from apps.shared.matching.filters import python_filter_pass, sql_filter_candidates
+from apps.shared.matching.score import score_listing_for_user
+from apps.shared.models import Event, Listing, Match, User
+from apps.workers.celery_app import app
+
+log = logging.getLogger(__name__)
+
+
+@app.task(name="match.fanout.listing", bind=True, max_retries=2, default_retry_delay=60)
+def match_fanout_listing(self, listing_id: int) -> dict:
+    with session_scope() as s:
+        listing = s.get(Listing, listing_id)
+        if listing is None or listing.state != ListingState.ACTIVE:
+            return {"ok": False, "reason": "not eligible"}
+        if listing.suppressed:
+            return {"ok": False, "reason": "suppressed"}
+        if listing.canonical_listing_id is not None:
+            return {"ok": False, "reason": "canonical pointer"}
+
+        candidates = sql_filter_candidates(s, listing)
+        inserted = 0
+        for user in candidates:
+            if not python_filter_pass(user, listing):
+                continue
+            score, reasons, _ = score_listing_for_user(user, listing)
+            if score < cfg.INSERT_THRESHOLD:
+                continue
+            m = Match(
+                user_id=user.id, listing_id=listing.id,
+                score=score, reasons=reasons,
+                state=MatchState.PENDING,
+            )
+            s.add(m)
+            s.flush()
+            inserted += 1
+            threshold = user.top_1pct_threshold or 999.0
+            if score >= threshold and not is_cold_start(s, user):
+                match_alert_instant.delay(m.id)
+        return {"ok": True, "candidates": len(candidates), "inserted": inserted}
+
+
+@app.task(name="match.alert.instant", bind=True, max_retries=2, default_retry_delay=60)
+def match_alert_instant(self, match_id: int) -> dict:
+    from apps.shared.telegram_send import send_match_message
+    from apps.bot.keyboards import match_actions_kb
+
+    with session_scope() as s:
+        m = s.get(Match, match_id)
+        if not m or m.state != MatchState.PENDING:
+            return {"ok": False, "reason": "state changed"}
+        user = s.get(User, m.user_id)
+        if not user or user.state != UserState.ACTIVE:
+            return {"ok": False, "reason": "user inactive"}
+
+        now_tsk = datetime.now(ZoneInfo("Asia/Tashkent"))
+        if now_tsk.hour >= cfg.QUIET_HOURS_START or now_tsk.hour < cfg.QUIET_HOURS_END:
+            return {"ok": False, "reason": "quiet hours"}
+
+        today_start = now_tsk.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
+        delivered_today = s.execute(
+            select(func.count()).select_from(Match)
+            .where(Match.user_id == user.id,
+                   Match.delivered_via == DeliveredVia.INSTANT,
+                   Match.created_at >= today_start)
+        ).scalar() or 0
+        if delivered_today >= cfg.INSTANT_DAILY_CAP:
+            return {"ok": False, "reason": "cap reached"}
+
+        listing = s.get(Listing, m.listing_id)
+        send_match_message(
+            user, listing, m,
+            prefix="🔥 Свежий топ-вариант",
+            reply_markup=match_actions_kb(m.id),
+        )
+        m.state = MatchState.SENT
+        m.delivered_via = DeliveredVia.INSTANT
+        s.add(Event(
+            kind="match_sent_instant",
+            user_id=user.id, listing_id=listing.id, match_id=m.id,
+        ))
+        return {"ok": True}
+
+
+@app.task(name="match.threshold.recompute")
+def match_threshold_recompute() -> dict:
+    """Daily 05:00 UTC: recompute per-user top_1pct_threshold."""
+    with session_scope() as s:
+        cutoff = datetime.now(UTC) - timedelta(days=14)
+        global_scores = [
+            row[0] for row in s.execute(
+                select(Match.score).where(Match.created_at >= cutoff)
+            )
+        ]
+        global_p99 = _percentile(global_scores, 99) if len(global_scores) >= cfg.THRESHOLD_MIN_GLOBAL else None
+
+        user_ids = [r[0] for r in s.execute(
+            select(User.id).where(User.state == UserState.ACTIVE)
+        )]
+        updated = 0
+        for uid in user_ids:
+            personal = [
+                r[0] for r in s.execute(
+                    select(Match.score).where(
+                        Match.user_id == uid,
+                        Match.created_at >= cutoff,
+                    )
+                )
+            ]
+            if len(personal) >= cfg.THRESHOLD_MIN_PERSONAL:
+                t = _percentile(personal, 99)
+            elif global_p99 is not None:
+                t = global_p99
+            else:
+                t = cfg.GLOBAL_TOP1PCT_BOOTSTRAP
+            s.execute(
+                update(User).where(User.id == uid).values(top_1pct_threshold=t)
+            )
+            updated += 1
+        return {"updated": updated, "global_p99": global_p99}
+
+
+@app.task(name="match.cleanup.dead")
+def match_cleanup_dead() -> dict:
+    """Mark matches whose listing is dead as dead too."""
+    with session_scope() as s:
+        result = s.execute(
+            update(Match)
+            .where(Match.state == MatchState.PENDING)
+            .where(Match.listing_id.in_(
+                select(Listing.id).where(Listing.state == ListingState.DEAD)
+            ))
+            .values(state=MatchState.DEAD)
+        )
+        return {"updated": result.rowcount or 0}
+
+
+def _percentile(values: list[float], p: float) -> float:
+    if not values:
+        return 0.0
+    sv = sorted(values)
+    k = (len(sv) - 1) * (p / 100.0)
+    lo = int(k)
+    hi = min(lo + 1, len(sv) - 1)
+    frac = k - lo
+    return sv[lo] + (sv[hi] - sv[lo]) * frac

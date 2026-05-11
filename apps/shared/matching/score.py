@@ -15,7 +15,7 @@ def cosine_normalized(raw: float) -> float:
 
 
 def _cosine_raw(a: list[float], b: list[float]) -> float:
-    if not a or not b:
+    if a is None or b is None or len(a) == 0 or len(b) == 0:
         return 0.0
     dot = sum(x * y for x, y in zip(a, b))
     na = sum(x * x for x in a) ** 0.5
@@ -94,7 +94,8 @@ def score_listing_for_user(user, listing) -> tuple[float, list[str], ScoreCompon
     """
     components = ScoreComponents()
     components.cosine = cosine_normalized(
-        _cosine_raw(user.preference_embedding or [], listing.embedding or [])
+        _cosine_raw(user.preference_embedding if user.preference_embedding is not None else [],
+                    listing.embedding if listing.embedding is not None else [])
     )
     components.budget_score = budget_score(listing.price_uzs, user.budget_min, user.budget_max)
     components.freshness = freshness_score(listing.posted_at)

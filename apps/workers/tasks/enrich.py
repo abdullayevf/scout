@@ -167,7 +167,11 @@ def _enrich_one(listing_id: int) -> dict:
 
 @app.task(name="enrich.listing", bind=True, max_retries=3, default_retry_delay=120)
 def enrich_listing(self, listing_id: int) -> dict:
-    return _enrich_one(listing_id)
+    result = _enrich_one(listing_id)
+    if result.get("ok"):
+        from apps.workers.tasks.match import match_fanout_listing
+        match_fanout_listing.delay(listing_id)
+    return result
 
 
 @app.task(name="enrich.listings.pending")
