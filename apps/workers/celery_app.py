@@ -13,6 +13,7 @@ app = Celery(
         "apps.workers.tasks.recheck",
         "apps.workers.tasks.purge",
         "apps.workers.tasks.match",
+        "apps.workers.tasks.digest",
     ],
 )
 
