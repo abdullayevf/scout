@@ -62,3 +62,18 @@ app.conf.beat_schedule.update({
         "schedule": crontab(hour=4, minute=30),  # daily 04:30 UTC
     },
 })
+
+app.conf.beat_schedule.update({
+    "digest-send-daily": {
+        "task": "digest.send.daily",
+        "schedule": crontab(hour=4, minute=0),  # 04:00 UTC = 09:00 Tashkent
+    },
+    "match-cleanup-dead": {
+        "task": "match.cleanup.dead",
+        "schedule": crontab(hour=4, minute=45),
+    },
+    "match-threshold-recompute": {
+        "task": "match.threshold.recompute",
+        "schedule": crontab(hour=5, minute=0),
+    },
+})
