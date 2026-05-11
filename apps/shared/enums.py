@@ -45,3 +45,18 @@ class UserState(StrEnum):
     PAUSED = "paused"
     SUCCESS = "success"
     DELETED = "deleted"
+
+
+class MatchState(StrEnum):
+    PENDING   = "pending"
+    SENT      = "sent"
+    LIKED     = "liked"
+    DISLIKED  = "disliked"
+    CONTACTED = "contacted"
+    RENTED    = "rented"
+    DEAD      = "dead"
+
+
+class DeliveredVia(StrEnum):
+    DIGEST  = "digest"
+    INSTANT = "instant"

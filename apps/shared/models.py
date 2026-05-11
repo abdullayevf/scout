@@ -20,8 +20,10 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from apps.shared.config import settings
 from apps.shared.enums import (  # noqa: F401
     BathroomType,
+    DeliveredVia,
     GenderConstraint,
     ListingState,
+    MatchState,
     OlxCategory,
     PosterRole,
     SearchType,
@@ -219,3 +221,53 @@ class Event(Base):
     listing_id: Mapped[int | None] = mapped_column(BigInteger)
     match_id: Mapped[int | None] = mapped_column(BigInteger)
     payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
+class Match(Base):
+    __tablename__ = "matches"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    listing_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    reasons: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, nullable=False)
+
+    state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=MatchState.PENDING, index=True
+    )
+    delivered_via: Mapped[str | None] = mapped_column(String(8))
+    dislike_reason: Mapped[str | None] = mapped_column(String(32))
+
+    liked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    disliked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    contacted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    chase_48h_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    chase_48h_done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    chase_5d_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    chase_5d_done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "listing_id", name="uq_matches_user_listing"),
+        Index("ix_matches_user_state_score", "user_id", "state", "score"),
+        Index(
+            "ix_matches_user_delivered",
+            "user_id",
+            "delivered_via",
+            "created_at",
+        ),
+        Index(
+            "ix_matches_pending_score",
+            "state",
+            "score",
+            postgresql_where="state = 'pending'",
+        ),
+    )
