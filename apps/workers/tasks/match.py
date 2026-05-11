@@ -37,6 +37,15 @@ def match_fanout_listing(self, listing_id: int) -> dict:
 
         candidates = sql_filter_candidates(s, listing)
         n_candidates = len(candidates)
+
+        # Skip users who already have a match row for this listing (idempotency).
+        existing_user_ids = {
+            row[0] for row in s.execute(
+                select(Match.user_id).where(Match.listing_id == listing.id)
+            )
+        }
+        candidates = [u for u in candidates if u.id not in existing_user_ids]
+
         for user in candidates:
             if not python_filter_pass(user, listing):
                 continue
