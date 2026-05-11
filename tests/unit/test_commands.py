@@ -124,6 +124,44 @@ async def test_reonboard_confirm_clears_state():
         reset_mock.assert_called_once_with(user)
 
 
+@pytest.mark.asyncio
+async def test_start_for_active_user_shows_returning_message():
+    from apps.bot.handlers.onboarding import cmd_start
+    from aiogram.fsm.context import FSMContext
+    from aiogram.fsm.storage.base import StorageKey
+    from aiogram.fsm.storage.memory import MemoryStorage
+
+    msg2 = make_message(text="/start")
+    storage = MemoryStorage()
+    key = StorageKey(bot_id=1, user_id=123, chat_id=123)
+    ctx = FSMContext(storage=storage, key=key)
+
+    user = make_user_row(UserState.ACTIVE)
+    with patch("apps.bot.handlers.onboarding._get_user", return_value=user):
+        await cmd_start(msg2, ctx)
+    text = msg2.answer.call_args[0][0]
+    assert "/settings" in text
+    assert "/reonboard" in text
+
+
+@pytest.mark.asyncio
+async def test_start_for_new_user_shows_welcome():
+    from apps.bot.handlers.onboarding import cmd_start
+    from aiogram.fsm.context import FSMContext
+    from aiogram.fsm.storage.base import StorageKey
+    from aiogram.fsm.storage.memory import MemoryStorage
+
+    msg3 = make_message(text="/start")
+    storage = MemoryStorage()
+    key = StorageKey(bot_id=1, user_id=124, chat_id=124)
+    ctx = FSMContext(storage=storage, key=key)
+
+    with patch("apps.bot.handlers.onboarding._get_user", return_value=None):
+        await cmd_start(msg3, ctx)
+    text = msg3.answer.call_args[0][0]
+    assert "Scout" in text  # WELCOME text
+
+
 def test_settings_router_importable():
     from apps.bot.handlers.settings import router
     assert router is not None

@@ -13,6 +13,8 @@ from apps.bot import messages as msg
 from apps.bot.keyboards import AXIS_LABELS
 from apps.bot.states import Onboarding
 from apps.shared.geo.yandex import GeocodeResult, geocode
+from apps.bot.handlers.commands import _get_user
+from apps.shared.enums import UserState
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -30,6 +32,11 @@ async def _geocode_async(query: str) -> GeocodeResult:
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
+    loop = asyncio.get_running_loop()
+    user = await loop.run_in_executor(None, _get_user, message.from_user.id)
+    if user is not None and user.state in (UserState.ACTIVE, UserState.PAUSED):
+        await message.answer(msg.ALREADY_ONBOARDED)
+        return
     await message.answer(msg.WELCOME, reply_markup=kb.start_kb())
 
 

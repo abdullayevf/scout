@@ -33,7 +33,8 @@ async def test_start_sends_welcome():
     from apps.bot.handlers.onboarding import cmd_start
     m = make_msg("/start")
     ctx = await make_ctx()
-    await cmd_start(m, ctx)
+    with patch("apps.bot.handlers.onboarding._get_user", return_value=None):
+        await cmd_start(m, ctx)
     m.answer.assert_called_once()
     assert "Scout" in m.answer.call_args[0][0]
 
