@@ -270,3 +270,77 @@ async def test_axis_priority_never_includes_furnishing():
     await cb_agent_filter(cb, ctx)
     data = await ctx.get_data()
     assert "furnishing" not in data["pending_axes"]
+
+
+@pytest.mark.asyncio
+async def test_build_profile_zero_vector_helper():
+    """Verify the zero-vector value used on Gemini failure matches settings.embedding_dim."""
+    from apps.shared.config import settings
+    zero = [0.0] * settings.embedding_dim
+    assert len(zero) == settings.embedding_dim
+    assert all(v == 0.0 for v in zero)
+
+
+@pytest.mark.asyncio
+async def test_build_profile_uses_zero_vector_on_embed_failure():
+    """When Gemini embed raises, the embedding passed to _upsert is a zero vector, not None."""
+    from apps.bot.handlers import onboarding
+    from apps.shared.config import settings
+
+    class FakeGemini:
+        def generate_json(self, prompt, schema):
+            return {"keywords": []}
+
+        def embed(self, text):
+            raise RuntimeError("simulated gemini failure")
+
+    message = AsyncMock()
+    message.from_user = MagicMock(id=999, username="t")
+    message.answer = AsyncMock()
+
+    data = {
+        "search_type": "whole_apt_solo",
+        "budget_min": 0,
+        "budget_max": 3_000_000,
+        "rooms": 2,
+        "areas": ["Yunusabad"],
+        "move_in_window": "now",
+        "commute_origin": None,
+        "dealbreakers": [],
+        "agent_filter": "owner_only",
+        "axis_priority": {},
+        "instant_reject_text": None,
+    }
+
+    captured_emb = []
+
+    # Patch _upsert at the source level by intercepting run_in_executor calls
+    # whose third positional arg (emb) we want to capture.
+    original_run_in_executor = None
+
+    async def fake_run_in_executor(executor, func, *args):
+        # Detect the _upsert call by inspecting the function's code name
+        func_name = getattr(func, "__name__", "") or getattr(
+            getattr(func, "__func__", None), "__name__", ""
+        )
+        if func_name == "_upsert":
+            # args = (u_data, keywords, emb)
+            captured_emb.append(args[2])
+            return None
+        # For all other executor calls (embed, generate_json, etc.) run inline
+        # by calling the function directly (they're all sync in the fake)
+        return func(*args)
+
+    fake_loop = MagicMock()
+    fake_loop.run_in_executor = fake_run_in_executor
+
+    with patch("apps.shared.llm.gemini.GeminiClient", FakeGemini), \
+         patch("asyncio.get_running_loop", return_value=fake_loop):
+        await onboarding._build_profile_async(message, data)
+
+    assert len(captured_emb) == 1, f"Expected 1 captured embedding, got {len(captured_emb)}"
+    emb = captured_emb[0]
+    assert emb is not None, "embedding should not be None — expected zero vector"
+    assert isinstance(emb, list)
+    assert len(emb) == settings.embedding_dim
+    assert all(v == 0.0 for v in emb)

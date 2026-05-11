@@ -474,14 +474,15 @@ async def _build_profile_async(message: Message, data: dict) -> None:
         tradeoff_hint_text=data.get("tradeoff_hint_text"),
         unacceptable_text=data.get("unacceptable_text"),
     )
-    embedding: list[float] | None = None
     try:
-        embedding = await loop.run_in_executor(None, gemini.embed, pref_text)
+        embedding: list[float] = await loop.run_in_executor(None, gemini.embed, pref_text)
     except Exception:
-        log.warning("Embedding build failed; user marked active with null embedding")
+        log.warning("Embedding build failed; falling back to zero vector")
+        from apps.shared.config import settings
+        embedding = [0.0] * settings.embedding_dim
 
     # 3. Upsert User row
-    def _upsert(u_data: dict, keywords: list[str], emb: list[float] | None) -> None:
+    def _upsert(u_data: dict, keywords: list[str], emb: list[float]) -> None:
         with session_scope() as s:
             row = s.execute(
                 select(User).where(User.tg_user_id == u_data["tg_user_id"])
