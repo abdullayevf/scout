@@ -225,3 +225,24 @@ def settings_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🔔 Уведомления",
                               callback_data=f"{CB_SETTINGS}:notifications")],
     ])
+
+
+def match_actions_kb(match_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="👍", callback_data=f"like:{match_id}"),
+        InlineKeyboardButton(text="👎", callback_data=f"dislike:{match_id}"),
+        InlineKeyboardButton(text="📞 Контакт", callback_data=f"contact:{match_id}"),
+    ]])
+
+
+def dislike_reasons_kb(match_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="💸 дорого",          callback_data=f"dislike_reason:expensive:{match_id}"),
+            InlineKeyboardButton(text="📍 район",           callback_data=f"dislike_reason:area:{match_id}"),
+        ],
+        [
+            InlineKeyboardButton(text="🐟 подозрительно",   callback_data=f"dislike_reason:fishy:{match_id}"),
+            InlineKeyboardButton(text="👁 видел",           callback_data=f"dislike_reason:seen:{match_id}"),
+        ],
+    ])
