@@ -181,3 +181,57 @@ def test_bot_main_has_dispatcher():
         mod = importlib.import_module("apps.bot.main")
         assert hasattr(mod, "dp")
         assert hasattr(mod, "main")
+
+
+@pytest.mark.asyncio
+async def test_settings_search_type_to_whole_apt_clears_gender_pref():
+    from apps.bot.handlers.settings import cb_settings_search_type
+    from aiogram.fsm.context import FSMContext
+    from aiogram.fsm.storage.base import StorageKey
+    from aiogram.fsm.storage.memory import MemoryStorage
+
+    cb = AsyncMock()
+    cb.data = "st:whole_apt_family"
+    cb.from_user = MagicMock(id=123)
+    cb.message = AsyncMock()
+    cb.message.from_user = MagicMock(id=123)
+    cb.answer = AsyncMock()
+
+    storage = MemoryStorage()
+    key = StorageKey(bot_id=1, user_id=123, chat_id=123)
+    ctx = FSMContext(storage=storage, key=key)
+
+    captured = {}
+    async def fake_finish(message, state, fields):
+        captured.update(fields)
+    with patch("apps.bot.handlers.settings._finish_settings_edit", side_effect=fake_finish):
+        await cb_settings_search_type(cb, ctx)
+    assert captured["search_type"] == "whole_apt_family"
+    assert captured["gender_pref"] is None
+
+
+@pytest.mark.asyncio
+async def test_settings_search_type_to_shared_room_keeps_gender_pref():
+    from apps.bot.handlers.settings import cb_settings_search_type
+    from aiogram.fsm.context import FSMContext
+    from aiogram.fsm.storage.base import StorageKey
+    from aiogram.fsm.storage.memory import MemoryStorage
+
+    cb = AsyncMock()
+    cb.data = "st:shared_room"
+    cb.from_user = MagicMock(id=123)
+    cb.message = AsyncMock()
+    cb.message.from_user = MagicMock(id=123)
+    cb.answer = AsyncMock()
+
+    storage = MemoryStorage()
+    key = StorageKey(bot_id=1, user_id=123, chat_id=123)
+    ctx = FSMContext(storage=storage, key=key)
+
+    captured = {}
+    async def fake_finish(message, state, fields):
+        captured.update(fields)
+    with patch("apps.bot.handlers.settings._finish_settings_edit", side_effect=fake_finish):
+        await cb_settings_search_type(cb, ctx)
+    assert captured["search_type"] == "shared_room"
+    assert "gender_pref" not in captured

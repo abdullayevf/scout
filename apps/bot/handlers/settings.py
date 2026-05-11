@@ -238,7 +238,10 @@ async def cb_settings_area_done(callback: CallbackQuery, state: FSMContext) -> N
 )
 async def cb_settings_search_type(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":", 1)[1]
-    await _finish_settings_edit(callback.message, state, {"search_type": value})
+    fields: dict = {"search_type": value}
+    if value in ("whole_apt_family", "whole_apt_solo"):
+        fields["gender_pref"] = None
+    await _finish_settings_edit(callback.message, state, fields)
     await callback.answer()
 
 
