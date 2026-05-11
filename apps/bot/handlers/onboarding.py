@@ -290,11 +290,28 @@ async def cb_agent_filter(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":", 1)[1]
     await state.update_data(agent_filter=value)
     data = await state.get_data()
-    axes = ["budget", "area"]
+
+    axes: list[str] = ["budget"]
+    axis_priority: dict[str, str] = {}
+
+    # area: ask priority only when user picked multiple areas; single area = implicit MUST
+    areas = data.get("areas", [])
+    if len(areas) > 1:
+        axes.append("area")
+    else:
+        axis_priority["area"] = "MUST"
+
+    # commute: ask only if user gave an origin
     if data.get("commute_origin"):
         axes.append("commute")
-    axes += ["rooms", "furnishing"]
-    await state.update_data(axis_priority={}, pending_axes=axes)
+
+    # rooms: ask only if user specified a count (rooms is None when user picked "any")
+    if data.get("rooms") is not None:
+        axes.append("rooms")
+
+    # furnishing axis removed — captured via `must_furnished` dealbreaker
+
+    await state.update_data(axis_priority=axis_priority, pending_axes=axes)
     await state.set_state(Onboarding.axis_priority)
     first_axis = axes[0]
     label = AXIS_LABELS[first_axis]

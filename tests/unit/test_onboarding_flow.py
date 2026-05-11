@@ -186,3 +186,86 @@ async def test_free_text_3_skip_triggers_done():
     )
     with patch("apps.bot.handlers.onboarding._build_profile_async"):
         await cb_free_text_skip(cb, ctx)
+
+
+@pytest.mark.asyncio
+async def test_axis_priority_skips_rooms_when_any():
+    from apps.bot.handlers.onboarding import cb_agent_filter
+    cb = make_cb("af:owner_only")
+    ctx = await make_ctx()
+    await ctx.set_state(Onboarding.agent_filter)
+    await ctx.update_data(
+        areas=["Yunusabad", "Chilanzar"],
+        commute_origin=None,
+        rooms=None,
+    )
+    await cb_agent_filter(cb, ctx)
+    data = await ctx.get_data()
+    assert "rooms" not in data["pending_axes"]
+    assert "furnishing" not in data["pending_axes"]
+
+
+@pytest.mark.asyncio
+async def test_axis_priority_includes_rooms_when_specified():
+    from apps.bot.handlers.onboarding import cb_agent_filter
+    cb = make_cb("af:owner_only")
+    ctx = await make_ctx()
+    await ctx.set_state(Onboarding.agent_filter)
+    await ctx.update_data(
+        areas=["Yunusabad", "Chilanzar"],
+        commute_origin=None,
+        rooms=2,
+    )
+    await cb_agent_filter(cb, ctx)
+    data = await ctx.get_data()
+    assert "rooms" in data["pending_axes"]
+
+
+@pytest.mark.asyncio
+async def test_axis_priority_auto_must_for_single_area():
+    from apps.bot.handlers.onboarding import cb_agent_filter
+    cb = make_cb("af:owner_only")
+    ctx = await make_ctx()
+    await ctx.set_state(Onboarding.agent_filter)
+    await ctx.update_data(
+        areas=["Yunusabad"],
+        commute_origin=None,
+        rooms=None,
+    )
+    await cb_agent_filter(cb, ctx)
+    data = await ctx.get_data()
+    assert "area" not in data["pending_axes"]
+    assert data["axis_priority"]["area"] == "MUST"
+
+
+@pytest.mark.asyncio
+async def test_axis_priority_asks_area_when_multiple():
+    from apps.bot.handlers.onboarding import cb_agent_filter
+    cb = make_cb("af:owner_only")
+    ctx = await make_ctx()
+    await ctx.set_state(Onboarding.agent_filter)
+    await ctx.update_data(
+        areas=["Yunusabad", "Chilanzar"],
+        commute_origin=None,
+        rooms=None,
+    )
+    await cb_agent_filter(cb, ctx)
+    data = await ctx.get_data()
+    assert "area" in data["pending_axes"]
+    assert "area" not in data.get("axis_priority", {})
+
+
+@pytest.mark.asyncio
+async def test_axis_priority_never_includes_furnishing():
+    from apps.bot.handlers.onboarding import cb_agent_filter
+    cb = make_cb("af:owner_only")
+    ctx = await make_ctx()
+    await ctx.set_state(Onboarding.agent_filter)
+    await ctx.update_data(
+        areas=["Yunusabad", "Chilanzar"],
+        commute_origin="TUIT",
+        rooms=2,
+    )
+    await cb_agent_filter(cb, ctx)
+    data = await ctx.get_data()
+    assert "furnishing" not in data["pending_axes"]
