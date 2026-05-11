@@ -227,14 +227,14 @@ class Match(Base):
     __tablename__ = "matches"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     listing_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
     score: Mapped[float] = mapped_column(Float, nullable=False)
     reasons: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, nullable=False)
 
     state: Mapped[str] = mapped_column(
-        String(16), nullable=False, default=MatchState.PENDING, index=True
+        String(16), nullable=False, default=MatchState.PENDING
     )
     delivered_via: Mapped[str | None] = mapped_column(String(8))
     dislike_reason: Mapped[str | None] = mapped_column(String(32))
