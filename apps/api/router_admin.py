@@ -39,7 +39,7 @@ def page_kpi(request: Request, _: None = Depends(require_admin)) -> HTMLResponse
             "mute_rate": kpi.mute_rate(s),
             "days_to_success": kpi.days_to_success(s),
         }
-    return templates.TemplateResponse("admin_kpi.html", {"request": request, **ctx})
+    return templates.TemplateResponse(request=request, name="admin_kpi.html", context=ctx)
 
 
 @router.get("/users", response_class=HTMLResponse)
@@ -48,9 +48,7 @@ def page_users(request: Request, _: None = Depends(require_admin)) -> HTMLRespon
         users = s.execute(
             select(User).order_by(desc(User.created_at)).limit(200)
         ).scalars().all()
-    return templates.TemplateResponse(
-        "admin_users.html", {"request": request, "users": users}
-    )
+    return templates.TemplateResponse(request=request, name="admin_users.html", context={"users": users})
 
 
 @router.post("/users/{tg_user_id}/pause")
@@ -98,8 +96,8 @@ def page_listings(
             q = q.where(Listing.state == state)
         listings = s.execute(q).scalars().all()
     return templates.TemplateResponse(
-        "admin_listings.html",
-        {"request": request, "listings": listings, "state_filter": state},
+        request=request, name="admin_listings.html",
+        context={"listings": listings, "state_filter": state},
     )
 
 
@@ -140,6 +138,4 @@ def page_scrape(request: Request, _: None = Depends(require_admin)) -> HTMLRespo
         }
         for r in rows
     ]
-    return templates.TemplateResponse(
-        "admin_scrape.html", {"request": request, "health": health}
-    )
+    return templates.TemplateResponse(request=request, name="admin_scrape.html", context={"health": health})
