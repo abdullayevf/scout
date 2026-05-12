@@ -14,6 +14,7 @@ app = Celery(
         "apps.workers.tasks.purge",
         "apps.workers.tasks.match",
         "apps.workers.tasks.digest",
+        "apps.workers.tasks.kpi",
     ],
 )
 
@@ -75,5 +76,24 @@ app.conf.beat_schedule.update({
     "match-threshold-recompute": {
         "task": "match.threshold.recompute",
         "schedule": crontab(hour=5, minute=0),
+    },
+})
+
+app.conf.beat_schedule.update({
+    "kpi-chase-48h": {
+        "task": "kpi.chase.48h.run",
+        "schedule": 600,  # every 10 min
+    },
+    "kpi-chase-5d": {
+        "task": "kpi.chase.5d.run",
+        "schedule": 600,
+    },
+    "kpi-weekly-checkin": {
+        "task": "kpi.weekly.checkin.send",
+        "schedule": crontab(hour=13, minute=0, day_of_week=0),  # Sunday 13:00 UTC = 18:00 Tashkent
+    },
+    "kpi-maintenance-purge-inactive": {
+        "task": "kpi.maintenance.purge_inactive",
+        "schedule": crontab(hour=2, minute=0),  # daily 02:00 UTC
     },
 })

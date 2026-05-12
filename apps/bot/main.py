@@ -8,7 +8,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
-from apps.bot.handlers import commands, match_callbacks, onboarding
+from apps.bot.handlers import commands, kpi_callbacks, match_callbacks, onboarding
 from apps.bot.handlers import settings as settings_handler
 from apps.shared.config import settings
 
@@ -25,6 +25,7 @@ dp.include_router(onboarding.router)
 dp.include_router(settings_handler.router)
 dp.include_router(commands.router)
 dp.include_router(match_callbacks.router)
+dp.include_router(kpi_callbacks.router)
 
 
 async def on_startup(bot: Bot) -> None:
