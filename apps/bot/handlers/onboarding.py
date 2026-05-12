@@ -11,11 +11,11 @@ from aiogram.types import CallbackQuery, Message
 
 from apps.bot import keyboards as kb
 from apps.bot import messages as msg
+from apps.bot.handlers.commands import _get_user
 from apps.bot.keyboards import AXIS_LABELS
 from apps.bot.states import Onboarding
-from apps.shared.geo.yandex import GeocodeResult, geocode
-from apps.bot.handlers.commands import _get_user
 from apps.shared.enums import UserState
+from apps.shared.geo.yandex import GeocodeResult, geocode
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -133,15 +133,21 @@ async def msg_budget_custom(message: Message, state: FSMContext) -> None:
     try:
         val = int(message.text.replace(" ", "").replace(",", ""))
     except ValueError:
-        await message.answer("Введи число, например: 2500000")
+        await message.delete()
+        sent = await message.answer("Введи число, например: 2500000")
+        await _track(state, sent.message_id)
         return
+    await message.delete()
+    await _flush(message.bot, message.chat.id, state)
     if step == "max":
         await state.update_data(budget_max=val, _budget_step="min")
-        await message.answer(msg.ASK_BUDGET_CUSTOM_MIN)
+        sent = await message.answer(msg.ASK_BUDGET_CUSTOM_MIN)
+        await _track(state, sent.message_id)
     else:
         await state.update_data(budget_min=val)
         await state.set_state(Onboarding.rooms)
-        await message.answer(msg.ASK_ROOMS, reply_markup=kb.rooms_kb())
+        sent = await message.answer(msg.ASK_ROOMS, reply_markup=kb.rooms_kb())
+        await _track(state, sent.message_id)
 
 
 # ---------------------------------------------------------------------------
@@ -251,10 +257,12 @@ async def cb_commute_skip(callback: CallbackQuery, state: FSMContext) -> None:
 @router.message(Onboarding.commute_origin)
 async def msg_commute_origin(message: Message, state: FSMContext) -> None:
     text = message.text.strip()
+    await message.delete()
+    await _flush(message.bot, message.chat.id, state)
     result = await _geocode_async(text)
     if result.lat is None:
-        await message.answer(msg.GEOCODE_FAILED,
-                             reply_markup=kb.commute_skip_kb())
+        sent = await message.answer(msg.GEOCODE_FAILED, reply_markup=kb.commute_skip_kb())
+        await _track(state, sent.message_id)
         return
     await state.update_data(
         commute_origin=text,
@@ -262,8 +270,8 @@ async def msg_commute_origin(message: Message, state: FSMContext) -> None:
         commute_origin_lng=result.lng,
     )
     await state.set_state(Onboarding.commute_minutes)
-    await message.answer(msg.ASK_COMMUTE_MINUTES,
-                         reply_markup=kb.commute_minutes_kb())
+    sent = await message.answer(msg.ASK_COMMUTE_MINUTES, reply_markup=kb.commute_minutes_kb())
+    await _track(state, sent.message_id)
 
 
 # ---------------------------------------------------------------------------
@@ -418,20 +426,28 @@ async def cb_free_text_wall(callback: CallbackQuery, state: FSMContext) -> None:
 @router.message(Onboarding.free_text_1)
 async def msg_free_text_1(message: Message, state: FSMContext) -> None:
     await state.update_data(tradeoff_hint_text=message.text.strip())
+    await message.delete()
+    await _flush(message.bot, message.chat.id, state)
     await state.set_state(Onboarding.free_text_2)
-    await message.answer(msg.FREE_TEXT_2, reply_markup=kb.free_text_skip_kb())
+    sent = await message.answer(msg.FREE_TEXT_2, reply_markup=kb.free_text_skip_kb())
+    await _track(state, sent.message_id)
 
 
 @router.message(Onboarding.free_text_2)
 async def msg_free_text_2(message: Message, state: FSMContext) -> None:
     await state.update_data(unacceptable_text=message.text.strip())
+    await message.delete()
+    await _flush(message.bot, message.chat.id, state)
     await state.set_state(Onboarding.free_text_3)
-    await message.answer(msg.FREE_TEXT_3, reply_markup=kb.free_text_skip_kb())
+    sent = await message.answer(msg.FREE_TEXT_3, reply_markup=kb.free_text_skip_kb())
+    await _track(state, sent.message_id)
 
 
 @router.message(Onboarding.free_text_3)
 async def msg_free_text_3(message: Message, state: FSMContext) -> None:
     await state.update_data(instant_reject_text=message.text.strip())
+    await message.delete()
+    await _flush(message.bot, message.chat.id, state)
     await _trigger_done(message, message.from_user, state)
 
 
@@ -460,7 +476,7 @@ async def _trigger_done(message: Message, from_user, state: FSMContext) -> None:
     data = await state.get_data()
     await state.clear()
     await message.answer(msg.BUILDING_PROFILE)
-    asyncio.create_task(_build_profile_async(message, from_user, data))
+    asyncio.create_task(_build_profile_async(message, from_user, data))  # noqa: RUF006
 
 
 async def _build_profile_async(message: Message, from_user, data: dict) -> None:
@@ -468,13 +484,15 @@ async def _build_profile_async(message: Message, from_user, data: dict) -> None:
     tg_user_id = from_user.id
     tg_username = getattr(from_user, "username", None)
 
-    from apps.shared.llm.gemini import GeminiClient
-    from apps.shared.enrichment.embed import build_user_pref_text
-    from apps.shared.db import session_scope
-    from apps.shared.models import User, Event
-    from apps.shared.enums import UserState
-    from sqlalchemy import select
     from datetime import UTC, datetime
+
+    from sqlalchemy import select
+
+    from apps.shared.db import session_scope
+    from apps.shared.enrichment.embed import build_user_pref_text
+    from apps.shared.enums import UserState
+    from apps.shared.llm.gemini import GeminiClient
+    from apps.shared.models import Event, User
 
     gemini = GeminiClient()
 
