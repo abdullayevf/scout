@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scout Admin</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    nav { border-bottom: 1px solid var(--pico-muted-border-color); margin-bottom: 1.5rem; }
+    table { font-size: 0.875rem; }
+    .badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem; }
+    .badge-ok { background: var(--pico-ins-color); }
+    .badge-warn { background: var(--pico-del-color); }
+  </style>
+</head>
+<body>
+  <nav class="container-fluid">
+    <ul><li><strong>🏠 Scout Admin</strong></li></ul>
+    <ul>
+      <li><a href="/admin">KPI</a></li>
+      <li><a href="/admin/users">Users</a></li>
+      <li><a href="/admin/listings">Listings</a></li>
+      <li><a href="/admin/scrape">Scrape</a></li>
+    </ul>
+  </nav>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
