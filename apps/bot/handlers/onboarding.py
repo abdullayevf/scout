@@ -58,9 +58,10 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(lambda c: c.data == kb.CB_START)
 async def cb_start(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.message.delete()
     await state.set_state(Onboarding.search_type)
-    await callback.message.answer(msg.ASK_SEARCH_TYPE,
-                                  reply_markup=kb.search_type_kb())
+    sent = await callback.message.answer(msg.ASK_SEARCH_TYPE, reply_markup=kb.search_type_kb())
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -77,13 +78,14 @@ async def start_search_type(message: Message, state: FSMContext) -> None:
 async def cb_search_type(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":", 1)[1]
     await state.update_data(search_type=value)
+    await callback.message.delete()
     if value in ("shared_room", "looking_for_roommate"):
         await state.set_state(Onboarding.gender_pref)
-        await callback.message.answer(msg.ASK_GENDER_PREF,
-                                      reply_markup=kb.gender_pref_kb())
+        sent = await callback.message.answer(msg.ASK_GENDER_PREF, reply_markup=kb.gender_pref_kb())
     else:
         await state.set_state(Onboarding.budget)
-        await callback.message.answer(msg.ASK_BUDGET, reply_markup=kb.budget_kb())
+        sent = await callback.message.answer(msg.ASK_BUDGET, reply_markup=kb.budget_kb())
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -95,8 +97,10 @@ async def cb_search_type(callback: CallbackQuery, state: FSMContext) -> None:
 async def cb_gender_pref(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":", 1)[1]
     await state.update_data(gender_pref=value)
+    await callback.message.delete()
     await state.set_state(Onboarding.budget)
-    await callback.message.answer(msg.ASK_BUDGET, reply_markup=kb.budget_kb())
+    sent = await callback.message.answer(msg.ASK_BUDGET, reply_markup=kb.budget_kb())
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -107,15 +111,18 @@ async def cb_gender_pref(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(Onboarding.budget, lambda c: c.data and c.data.startswith(f"{kb.CB_BUDGET}:"))
 async def cb_budget(callback: CallbackQuery, state: FSMContext) -> None:
     parts = callback.data.split(":")
+    await callback.message.delete()
     if parts[1] == "custom":
         await state.set_state(Onboarding.budget_custom)
-        await callback.message.answer(msg.ASK_BUDGET_CUSTOM_MAX)
+        sent = await callback.message.answer(msg.ASK_BUDGET_CUSTOM_MAX)
+        await _track(state, sent.message_id)
         await callback.answer()
         return
     lo, hi = int(parts[1]), int(parts[2])
     await state.update_data(budget_min=lo, budget_max=hi)
     await state.set_state(Onboarding.rooms)
-    await callback.message.answer(msg.ASK_ROOMS, reply_markup=kb.rooms_kb())
+    sent = await callback.message.answer(msg.ASK_ROOMS, reply_markup=kb.rooms_kb())
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -145,9 +152,11 @@ async def msg_budget_custom(message: Message, state: FSMContext) -> None:
 async def cb_rooms(callback: CallbackQuery, state: FSMContext) -> None:
     val = int(callback.data.split(":")[1])
     await state.update_data(rooms=val if val > 0 else None)
+    await callback.message.delete()
     await state.set_state(Onboarding.areas)
     await state.update_data(areas=[])
-    await callback.message.answer(msg.ASK_AREAS, reply_markup=kb.areas_kb([]))
+    sent = await callback.message.answer(msg.ASK_AREAS, reply_markup=kb.areas_kb([]))
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
