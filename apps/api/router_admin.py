@@ -40,3 +40,47 @@ def page_kpi(request: Request, _: None = Depends(require_admin)) -> HTMLResponse
             "days_to_success": kpi.days_to_success(s),
         }
     return templates.TemplateResponse("admin_kpi.html", {"request": request, **ctx})
+
+
+@router.get("/users", response_class=HTMLResponse)
+def page_users(request: Request, _: None = Depends(require_admin)) -> HTMLResponse:
+    with session_scope() as s:
+        users = s.execute(
+            select(User).order_by(desc(User.created_at)).limit(200)
+        ).scalars().all()
+    return templates.TemplateResponse(
+        "admin_users.html", {"request": request, "users": users}
+    )
+
+
+@router.post("/users/{tg_user_id}/pause")
+def action_pause(tg_user_id: int, _: None = Depends(require_admin)) -> RedirectResponse:
+    with session_scope() as s:
+        user = s.execute(
+            select(User).where(User.tg_user_id == tg_user_id)
+        ).scalar_one_or_none()
+        if user:
+            user.state = UserState.PAUSED
+    return RedirectResponse(url="/admin/users", status_code=303)
+
+
+@router.post("/users/{tg_user_id}/resume")
+def action_resume(tg_user_id: int, _: None = Depends(require_admin)) -> RedirectResponse:
+    with session_scope() as s:
+        user = s.execute(
+            select(User).where(User.tg_user_id == tg_user_id)
+        ).scalar_one_or_none()
+        if user:
+            user.state = UserState.ACTIVE
+    return RedirectResponse(url="/admin/users", status_code=303)
+
+
+@router.post("/users/{tg_user_id}/delete")
+def action_delete(tg_user_id: int, _: None = Depends(require_admin)) -> RedirectResponse:
+    with session_scope() as s:
+        user = s.execute(
+            select(User).where(User.tg_user_id == tg_user_id)
+        ).scalar_one_or_none()
+        if user:
+            user.state = UserState.DELETED
+    return RedirectResponse(url="/admin/users", status_code=303)

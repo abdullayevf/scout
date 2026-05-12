@@ -1,0 +1,51 @@
+{% extends "admin_base.html" %}
+{% block content %}
+<h2>Users</h2>
+<figure>
+<table>
+  <thead>
+    <tr>
+      <th>TG ID</th><th>Username</th><th>State</th>
+      <th>Budget (UZS)</th><th>Areas</th><th>Onboarded</th><th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for u in users %}
+    <tr>
+      <td>{{ u.tg_user_id }}</td>
+      <td>{{ "@" + u.tg_username if u.tg_username else "—" }}</td>
+      <td>
+        <span class="badge {% if u.state == 'active' %}badge-ok{% else %}badge-warn{% endif %}">
+          {{ u.state }}
+        </span>
+      </td>
+      <td>
+        {% if u.budget_min and u.budget_max %}
+          {{ "{:,}".format(u.budget_min) }} – {{ "{:,}".format(u.budget_max) }}
+        {% else %}—{% endif %}
+      </td>
+      <td>{{ u.areas | join(", ") if u.areas else "—" }}</td>
+      <td>{{ u.onboarded_at.strftime("%Y-%m-%d") if u.onboarded_at else "—" }}</td>
+      <td style="white-space:nowrap">
+        {% if u.state == "active" %}
+          <form method="post" action="/admin/users/{{ u.tg_user_id }}/pause" style="display:inline">
+            <button type="submit" class="secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem">Pause</button>
+          </form>
+        {% elif u.state == "paused" %}
+          <form method="post" action="/admin/users/{{ u.tg_user_id }}/resume" style="display:inline">
+            <button type="submit" style="padding:0.25rem 0.5rem;font-size:0.75rem">Resume</button>
+          </form>
+        {% endif %}
+        <form method="post" action="/admin/users/{{ u.tg_user_id }}/delete" style="display:inline">
+          <button type="submit" class="contrast" style="padding:0.25rem 0.5rem;font-size:0.75rem"
+                  onclick="return confirm('Delete user {{ u.tg_user_id }}?')">Delete</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" style="text-align:center">No users yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</figure>
+{% endblock %}
