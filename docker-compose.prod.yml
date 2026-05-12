@@ -1,11 +1,9 @@
 services:
   postgres:
-    ports:
-      - "5434:5432"           # 5433 taken by another project on this host
+    ports: []                 # no host binding needed — internal Docker network only
 
   redis:
-    ports:
-      - "127.0.0.1:6381:6379"
+    ports: []                 # no host binding needed — internal Docker network only
 
   api:
     ports:
