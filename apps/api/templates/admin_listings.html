@@ -1,0 +1,47 @@
+{% extends "admin_base.html" %}
+{% block content %}
+<h2>Listings</h2>
+<form method="get" style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem">
+  <select name="state" style="width:auto;margin:0" onchange="this.form.submit()">
+    <option value="">All states</option>
+    <option value="pending_enrich" {% if state_filter == "pending_enrich" %}selected{% endif %}>pending_enrich</option>
+    <option value="active"         {% if state_filter == "active"         %}selected{% endif %}>active</option>
+    <option value="dead"           {% if state_filter == "dead"           %}selected{% endif %}>dead</option>
+  </select>
+  <small>Showing {{ listings|length }} rows</small>
+</form>
+<figure>
+<table>
+  <thead>
+    <tr>
+      <th>ID</th><th>Title</th><th>State</th><th>Risk</th><th>Suppressed</th><th>Source</th><th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for l in listings %}
+    <tr>
+      <td>{{ l.id }}</td>
+      <td>{{ l.title[:55] }}{% if l.title|length > 55 %}…{% endif %}</td>
+      <td><span class="badge {% if l.state == 'active' %}badge-ok{% else %}badge-warn{% endif %}">{{ l.state }}</span></td>
+      <td>
+        <span class="badge {% if l.risk_score > 3 %}badge-warn{% else %}badge-ok{% endif %}">
+          {{ l.risk_score }}
+        </span>
+      </td>
+      <td>{{ "yes" if l.suppressed else "no" }}</td>
+      <td><a href="{{ l.source_url }}" target="_blank" rel="noopener">link ↗</a></td>
+      <td>
+        <form method="post" action="/admin/listings/{{ l.id }}/suppress">
+          <button type="submit" class="secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem">
+            {{ "Unsuppress" if l.suppressed else "Suppress" }}
+          </button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" style="text-align:center">No listings.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</figure>
+{% endblock %}

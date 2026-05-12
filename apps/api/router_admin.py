@@ -84,3 +84,31 @@ def action_delete(tg_user_id: int, _: None = Depends(require_admin)) -> Redirect
         if user:
             user.state = UserState.DELETED
     return RedirectResponse(url="/admin/users", status_code=303)
+
+
+@router.get("/listings", response_class=HTMLResponse)
+def page_listings(
+    request: Request,
+    state: str = Query(default=""),
+    _: None = Depends(require_admin),
+) -> HTMLResponse:
+    with session_scope() as s:
+        q = select(Listing).order_by(desc(Listing.created_at)).limit(100)
+        if state:
+            q = q.where(Listing.state == state)
+        listings = s.execute(q).scalars().all()
+    return templates.TemplateResponse(
+        "admin_listings.html",
+        {"request": request, "listings": listings, "state_filter": state},
+    )
+
+
+@router.post("/listings/{listing_id}/suppress")
+def action_suppress(listing_id: int, _: None = Depends(require_admin)) -> RedirectResponse:
+    with session_scope() as s:
+        listing = s.execute(
+            select(Listing).where(Listing.id == listing_id)
+        ).scalar_one_or_none()
+        if listing:
+            listing.suppressed = not listing.suppressed
+    return RedirectResponse(url="/admin/listings", status_code=303)
