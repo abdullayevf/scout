@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import suppress
 
 from aiogram import Router
 from aiogram.filters import Command, StateFilter
@@ -18,6 +19,21 @@ from apps.shared.enums import UserState
 
 log = logging.getLogger(__name__)
 router = Router()
+
+
+async def _track(state: FSMContext, *msg_ids: int) -> None:
+    data = await state.get_data()
+    ids = list(data.get("_del_ids", []))
+    ids.extend(msg_ids)
+    await state.update_data(_del_ids=ids)
+
+
+async def _flush(bot, chat_id: int, state: FSMContext) -> None:
+    data = await state.get_data()
+    for mid in data.get("_del_ids", []):
+        with suppress(Exception):
+            await bot.delete_message(chat_id, mid)
+    await state.update_data(_del_ids=[])
 
 
 async def _geocode_async(query: str) -> GeocodeResult:
