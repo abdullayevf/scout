@@ -115,7 +115,10 @@ def match_alert_instant(self, match_id: int) -> dict:
 
 @app.task(name="match.threshold.recompute")
 def match_threshold_recompute() -> dict:
-    """Daily 05:00 UTC: recompute per-user top_1pct_threshold."""
+    """Daily 05:00 UTC: recompute per-user top_1pct_threshold.
+
+    Priority: reaction-weighted p99 (liked/contacted/rented) → personal p99 → global p99 → bootstrap.
+    """
     with session_scope() as s:
         cutoff = datetime.now(UTC) - timedelta(days=14)
         global_scores = [
@@ -130,6 +133,15 @@ def match_threshold_recompute() -> dict:
         )]
         updated = 0
         for uid in user_ids:
+            reaction_scores = [
+                r[0] for r in s.execute(
+                    select(Match.score).where(
+                        Match.user_id == uid,
+                        Match.state.in_([MatchState.LIKED, MatchState.CONTACTED, MatchState.RENTED]),
+                        Match.created_at >= cutoff,
+                    )
+                )
+            ]
             personal = [
                 r[0] for r in s.execute(
                     select(Match.score).where(
@@ -138,7 +150,9 @@ def match_threshold_recompute() -> dict:
                     )
                 )
             ]
-            if len(personal) >= cfg.THRESHOLD_MIN_PERSONAL:
+            if len(reaction_scores) >= cfg.THRESHOLD_MIN_REACTIONS:
+                t = _percentile(reaction_scores, 99)
+            elif len(personal) >= cfg.THRESHOLD_MIN_PERSONAL:
                 t = _percentile(personal, 99)
             elif global_p99 is not None:
                 t = global_p99
