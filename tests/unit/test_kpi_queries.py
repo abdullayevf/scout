@@ -88,3 +88,10 @@ def test_mute_rate_correct(engine, db_session):
     db_session.commit()
     rate = mute_rate(db_session, days=365)
     assert abs(rate - 0.5) < 0.01  # 1 of 2 active users muted
+
+
+def test_mute_rate_zero_when_no_active_users(engine, db_session):
+    from apps.shared.kpi import mute_rate
+    Base.metadata.create_all(engine)
+    db_session.commit()
+    assert mute_rate(db_session, days=365) == 0.0

@@ -15,7 +15,11 @@ _CONTACTED = [MatchState.CONTACTED, MatchState.RENTED]
 
 
 def like_rate(session: Session, days: int = 30) -> float:
-    """Fraction of reacted matches that were liked, contacted, or rented."""
+    """Fraction of matches created in the window that were liked, contacted, or rented.
+
+    Uses match creation date (when the match was sent) as the window boundary,
+    not reaction date. This measures recommendation quality for recent matches.
+    """
     cutoff = datetime.now(UTC) - timedelta(days=days)
     total = session.execute(
         select(func.count()).select_from(Match)
@@ -31,7 +35,10 @@ def like_rate(session: Session, days: int = 30) -> float:
 
 
 def contact_rate(session: Session, days: int = 30) -> float:
-    """Fraction of reacted matches that resulted in contact or rent."""
+    """Fraction of matches created in the window that resulted in contact or rent.
+
+    Uses match creation date as the window boundary (see like_rate for rationale).
+    """
     cutoff = datetime.now(UTC) - timedelta(days=days)
     total = session.execute(
         select(func.count()).select_from(Match)

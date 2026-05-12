@@ -142,22 +142,23 @@ def match_threshold_recompute() -> dict:
                     )
                 )
             ]
-            personal = [
-                r[0] for r in s.execute(
-                    select(Match.score).where(
-                        Match.user_id == uid,
-                        Match.created_at >= cutoff,
-                    )
-                )
-            ]
             if len(reaction_scores) >= cfg.THRESHOLD_MIN_REACTIONS:
                 t = _percentile(reaction_scores, 99)
-            elif len(personal) >= cfg.THRESHOLD_MIN_PERSONAL:
-                t = _percentile(personal, 99)
-            elif global_p99 is not None:
-                t = global_p99
             else:
-                t = cfg.GLOBAL_TOP1PCT_BOOTSTRAP
+                personal = [
+                    r[0] for r in s.execute(
+                        select(Match.score).where(
+                            Match.user_id == uid,
+                            Match.created_at >= cutoff,
+                        )
+                    )
+                ]
+                if len(personal) >= cfg.THRESHOLD_MIN_PERSONAL:
+                    t = _percentile(personal, 99)
+                elif global_p99 is not None:
+                    t = global_p99
+                else:
+                    t = cfg.GLOBAL_TOP1PCT_BOOTSTRAP
             s.execute(
                 update(User).where(User.id == uid).values(top_1pct_threshold=t)
             )

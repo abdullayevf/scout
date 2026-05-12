@@ -119,7 +119,6 @@ def test_reaction_weighted_when_enough_liked(engine, db_session):
         match_threshold_recompute.run()
 
     db_session.refresh(u)
-    # If reaction-weighted: p99 of 10 liked scores (0.85..0.94) ≈ 0.935
-    # Either way must be > 0.80 to ensure high bar for liked users
+    # p99 of 10 values [0.85..0.94] ≈ 0.939; reaction branch must have fired
     assert u.top_1pct_threshold is not None
-    assert u.top_1pct_threshold > 0.80
+    assert u.top_1pct_threshold > 0.93
