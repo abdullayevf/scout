@@ -71,6 +71,29 @@ async def test_chase_48h_yes_sets_contacted_and_schedules_5d(engine, db_session)
 # --- chase48 no ---
 
 @pytest.mark.asyncio
+async def test_chase_48h_yes_rejects_foreign_match(engine, db_session):
+    from apps.bot.handlers.kpi_callbacks import on_chase_48h_yes
+    Base.metadata.create_all(engine)
+    owner = _user(db_session, tg=610)
+    attacker_tg = 611
+    m = _match(db_session, owner.id, state=MatchState.LIKED)
+    db_session.commit()
+
+    cb = _cb(f"chase48y:{m.id}", tg_id=attacker_tg)
+    with patch("apps.bot.handlers.kpi_callbacks.session_scope") as ss:
+        ss.return_value.__enter__.return_value = db_session
+        await on_chase_48h_yes(cb)
+
+    db_session.refresh(m)
+    # State must not have changed
+    assert m.state == MatchState.LIKED
+    cb.answer.assert_called_once()
+    # No event written
+    evs = db_session.execute(select(Event).where(Event.kind == "chase_48h_yes")).scalars().all()
+    assert len(evs) == 0
+
+
+@pytest.mark.asyncio
 async def test_chase_48h_no_writes_event(engine, db_session):
     from apps.bot.handlers.kpi_callbacks import on_chase_48h_no
     Base.metadata.create_all(engine)

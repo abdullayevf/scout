@@ -39,7 +39,8 @@ async def on_chase_48h_yes(cb: CallbackQuery) -> None:
             m.contacted_at = datetime.now(UTC)
         if m.state not in (MatchState.CONTACTED, MatchState.RENTED):
             m.state = MatchState.CONTACTED
-        m.chase_5d_due_at = datetime.now(UTC) + timedelta(days=5)
+        if m.state != MatchState.RENTED:
+            m.chase_5d_due_at = datetime.now(UTC) + timedelta(days=5)
         s.add(Event(kind="chase_48h_yes", user_id=u.id, match_id=match_id))
         s.flush()
     await cb.message.edit_reply_markup(reply_markup=None)
@@ -144,6 +145,7 @@ async def on_weekly_searching(cb: CallbackQuery) -> None:
         if u is None:
             await cb.answer()
             return
+        u.last_active_at = datetime.now(UTC)
         s.add(Event(kind="weekly_checkin_searching", user_id=u.id))
         s.flush()
     await cb.message.edit_reply_markup(reply_markup=None)
