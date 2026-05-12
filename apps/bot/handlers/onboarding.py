@@ -181,7 +181,8 @@ async def cb_area_toggle(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(Onboarding.areas, lambda c: c.data == kb.CB_AREA_CUSTOM)
 async def cb_area_custom(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(_awaiting_custom_area=True)
-    await callback.message.answer(msg.ASK_CUSTOM_AREA)
+    sent = await callback.message.answer(msg.ASK_CUSTOM_AREA)
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -190,13 +191,16 @@ async def msg_custom_area(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     if not data.get("_awaiting_custom_area"):
         return
+    await message.delete()
+    await _flush(message.bot, message.chat.id, state)
     selected = list(data.get("areas", []))
     selected.append(message.text.strip())
     await state.update_data(areas=selected, _awaiting_custom_area=False)
-    await message.answer(
+    sent = await message.answer(
         f"Добавлен: «{message.text.strip()}»",
         reply_markup=kb.areas_kb(selected),
     )
+    await _track(state, sent.message_id)
 
 
 @router.callback_query(Onboarding.areas, lambda c: c.data == kb.CB_AREA_DONE)
@@ -205,8 +209,11 @@ async def cb_area_done(callback: CallbackQuery, state: FSMContext) -> None:
     if not data.get("areas"):
         await callback.answer("Выбери хотя бы один район", show_alert=True)
         return
+    await callback.message.delete()
+    await _flush(callback.message.bot, callback.message.chat.id, state)
     await state.set_state(Onboarding.move_in)
-    await callback.message.answer(msg.ASK_MOVE_IN, reply_markup=kb.move_in_kb())
+    sent = await callback.message.answer(msg.ASK_MOVE_IN, reply_markup=kb.move_in_kb())
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -307,9 +314,11 @@ async def cb_dealbreaker_toggle(callback: CallbackQuery, state: FSMContext) -> N
 
 @router.callback_query(Onboarding.dealbreakers, lambda c: c.data == kb.CB_DB_DONE)
 async def cb_dealbreakers_done(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.message.delete()
+    await _flush(callback.message.bot, callback.message.chat.id, state)
     await state.set_state(Onboarding.agent_filter)
-    await callback.message.answer(msg.ASK_AGENT_FILTER,
-                                  reply_markup=kb.agent_filter_kb())
+    sent = await callback.message.answer(msg.ASK_AGENT_FILTER, reply_markup=kb.agent_filter_kb())
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
