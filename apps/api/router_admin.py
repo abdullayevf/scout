@@ -4,13 +4,13 @@ from pathlib import Path
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import desc, func, select
 
 from apps.shared import kpi
 from apps.shared.config import settings
 from apps.shared.db import session_scope
-from apps.shared.enums import ListingState, UserState
+from apps.shared.enums import UserState
 from apps.shared.models import Listing, ScrapeRunHealth, User
-from sqlalchemy import desc, func, select
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -112,3 +112,34 @@ def action_suppress(listing_id: int, _: None = Depends(require_admin)) -> Redire
         if listing:
             listing.suppressed = not listing.suppressed
     return RedirectResponse(url="/admin/listings", status_code=303)
+
+
+@router.get("/scrape", response_class=HTMLResponse)
+def page_scrape(request: Request, _: None = Depends(require_admin)) -> HTMLResponse:
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    with session_scope() as s:
+        rows = s.execute(
+            select(
+                ScrapeRunHealth.category,
+                func.sum(ScrapeRunHealth.success_count).label("success"),
+                func.sum(ScrapeRunHealth.failure_count).label("failure"),
+                func.bool_or(ScrapeRunHealth.used_playwright_fallback).label("playwright"),
+            )
+            .where(ScrapeRunHealth.ts >= cutoff)
+            .group_by(ScrapeRunHealth.category)
+            .order_by(ScrapeRunHealth.category)
+        ).all()
+    health = [
+        {
+            "category": r.category,
+            "success": r.success or 0,
+            "failure": r.failure or 0,
+            "rate": (r.success or 0) / ((r.success or 0) + (r.failure or 0))
+                    if ((r.success or 0) + (r.failure or 0)) > 0 else 0.0,
+            "playwright": r.playwright,
+        }
+        for r in rows
+    ]
+    return templates.TemplateResponse(
+        "admin_scrape.html", {"request": request, "health": health}
+    )

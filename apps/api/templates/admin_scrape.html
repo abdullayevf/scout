@@ -1,0 +1,30 @@
+{% extends "admin_base.html" %}
+{% block content %}
+<h2>Scrape Health <small style="font-size:0.6em;color:var(--pico-muted-color)">(last 24h)</small></h2>
+{% if health %}
+<figure>
+<table>
+  <thead>
+    <tr><th>Category</th><th>Success</th><th>Failure</th><th>Rate</th><th>Playwright</th></tr>
+  </thead>
+  <tbody>
+  {% for row in health %}
+    <tr>
+      <td>{{ row.category }}</td>
+      <td>{{ row.success }}</td>
+      <td>{{ row.failure }}</td>
+      <td>
+        <span class="badge {% if row.rate >= 0.8 %}badge-ok{% else %}badge-warn{% endif %}">
+          {{ "%.1f"|format(row.rate * 100) }}%
+        </span>
+      </td>
+      <td>{{ "yes" if row.playwright else "no" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</figure>
+{% else %}
+<p>No scrape data in the last 24h.</p>
+{% endif %}
+{% endblock %}
