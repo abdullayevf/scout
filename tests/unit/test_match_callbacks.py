@@ -163,3 +163,146 @@ async def test_on_contact_rejects_foreign_match(engine, db_session):
         await on_contact(attacker_cb)
     attacker_cb.message.answer.assert_not_called()
     attacker_cb.answer.assert_called_once()
+
+
+# --- Plan 4: state transitions and ML feedback ---
+
+from datetime import UTC, datetime
+
+
+def _make_listing(db_session, source_id="L1", phone_hash="ph1", area="Yunusabad",
+                  price_uzs=2_000_000):
+    from apps.shared.enums import ListingState
+    l = Listing(
+        source_url=f"https://olx.uz/{source_id}", source_listing_id=source_id,
+        source_category="long_term_apt", title="t", description_raw="",
+        state=ListingState.ACTIVE, image_urls=[], image_phashes=[],
+        phone_hash=phone_hash, area=area, price_uzs=price_uzs,
+    )
+    db_session.add(l)
+    db_session.flush()
+    return l
+
+
+def _make_match(db_session, user_id, listing_id):
+    m = Match(user_id=user_id, listing_id=listing_id, score=0.5, reasons=[])
+    db_session.add(m)
+    db_session.flush()
+    return m
+
+
+@pytest.mark.asyncio
+async def test_on_like_transitions_state_and_sets_chase(engine, db_session):
+    Base.metadata.create_all(engine)
+    u = _make_user(db_session, tg_user_id=401)
+    listing = _make_listing(db_session, source_id="L401")
+    m = _make_match(db_session, u.id, listing.id)
+    cb = _make_cb(f"like:{m.id}", user_id=401)
+    with patch("apps.bot.handlers.match_callbacks.session_scope") as ss:
+        ss.return_value.__enter__.return_value = db_session
+        await on_like(cb)
+    db_session.flush()
+    db_session.refresh(m)
+    from apps.shared.enums import MatchState
+    assert m.state == MatchState.LIKED
+    assert m.liked_at is not None
+    assert m.chase_48h_due_at is not None
+
+
+@pytest.mark.asyncio
+async def test_on_like_updates_preference_embedding(engine, db_session):
+    """Verify that on_like calls apply_like when a listing is present."""
+    Base.metadata.create_all(engine)
+    u = _make_user(db_session, tg_user_id=402)
+    listing = _make_listing(db_session, source_id="L402")
+    m = _make_match(db_session, u.id, listing.id)
+    cb = _make_cb(f"like:{m.id}", user_id=402)
+    with patch("apps.bot.handlers.match_callbacks.session_scope") as ss, \
+         patch("apps.bot.handlers.match_callbacks.apply_like") as mock_apply_like:
+        ss.return_value.__enter__.return_value = db_session
+        await on_like(cb)
+    mock_apply_like.assert_called_once_with(u, listing)
+
+
+@pytest.mark.asyncio
+async def test_on_dislike_reason_expensive_tightens_budget(engine, db_session):
+    Base.metadata.create_all(engine)
+    u = _make_user(db_session, tg_user_id=403)
+    u.budget_max = 3_000_000
+    listing = _make_listing(db_session, source_id="L403", price_uzs=2_000_000)
+    m = _make_match(db_session, u.id, listing.id)
+    cb = _make_cb(f"dislike_reason:expensive:{m.id}", user_id=403)
+    with patch("apps.bot.handlers.match_callbacks.session_scope") as ss:
+        ss.return_value.__enter__.return_value = db_session
+        await on_dislike_reason(cb)
+    db_session.flush()
+    db_session.refresh(u)
+    assert u.budget_max < 3_000_000
+
+
+@pytest.mark.asyncio
+async def test_on_dislike_reason_area_adds_to_mask(engine, db_session):
+    Base.metadata.create_all(engine)
+    u = _make_user(db_session, tg_user_id=404)
+    u.negative_area_mask = []
+    listing = _make_listing(db_session, source_id="L404", area="Chilanzar")
+    m = _make_match(db_session, u.id, listing.id)
+    cb = _make_cb(f"dislike_reason:area:{m.id}", user_id=404)
+    with patch("apps.bot.handlers.match_callbacks.session_scope") as ss:
+        ss.return_value.__enter__.return_value = db_session
+        await on_dislike_reason(cb)
+    db_session.flush()
+    db_session.refresh(u)
+    assert "Chilanzar" in u.negative_area_mask
+
+
+@pytest.mark.asyncio
+async def test_on_dislike_reason_fishy_adds_to_distrust_set(engine, db_session):
+    Base.metadata.create_all(engine)
+    u = _make_user(db_session, tg_user_id=405)
+    u.distrust_set = []
+    listing = _make_listing(db_session, source_id="L405", phone_hash="evil_hash")
+    m = _make_match(db_session, u.id, listing.id)
+    cb = _make_cb(f"dislike_reason:fishy:{m.id}", user_id=405)
+    with patch("apps.bot.handlers.match_callbacks.session_scope") as ss:
+        ss.return_value.__enter__.return_value = db_session
+        await on_dislike_reason(cb)
+    db_session.flush()
+    db_session.refresh(u)
+    assert "evil_hash" in u.distrust_set
+
+
+@pytest.mark.asyncio
+async def test_on_dislike_reason_seen_adds_to_seen_set(engine, db_session):
+    Base.metadata.create_all(engine)
+    u = _make_user(db_session, tg_user_id=406)
+    u.seen_set = []
+    listing = _make_listing(db_session, source_id="L406")
+    m = _make_match(db_session, u.id, listing.id)
+    cb = _make_cb(f"dislike_reason:seen:{m.id}", user_id=406)
+    with patch("apps.bot.handlers.match_callbacks.session_scope") as ss:
+        ss.return_value.__enter__.return_value = db_session
+        await on_dislike_reason(cb)
+    db_session.flush()
+    db_session.refresh(u)
+    assert listing.id in u.seen_set
+
+
+@pytest.mark.asyncio
+async def test_on_contact_transitions_to_contacted_and_schedules_chase(engine, db_session):
+    Base.metadata.create_all(engine)
+    u = _make_user(db_session, tg_user_id=407)
+    listing = _make_listing(db_session, source_id="L407")
+    listing.contact_phone_raw = "+998901234567"
+    m = _make_match(db_session, u.id, listing.id)
+    cb = _make_cb(f"contact:{m.id}", user_id=407)
+    cb.message.answer = AsyncMock()
+    with patch("apps.bot.handlers.match_callbacks.session_scope") as ss:
+        ss.return_value.__enter__.return_value = db_session
+        await on_contact(cb)
+    db_session.flush()
+    db_session.refresh(m)
+    from apps.shared.enums import MatchState
+    assert m.state == MatchState.CONTACTED
+    assert m.contacted_at is not None
+    assert m.chase_48h_due_at is not None
