@@ -225,9 +225,10 @@ async def cb_area_done(callback: CallbackQuery, state: FSMContext) -> None:
 async def cb_move_in(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":", 1)[1]
     await state.update_data(move_in_window=value)
+    await callback.message.delete()
     await state.set_state(Onboarding.commute_origin)
-    await callback.message.answer(msg.ASK_COMMUTE_ORIGIN,
-                                  reply_markup=kb.commute_skip_kb())
+    sent = await callback.message.answer(msg.ASK_COMMUTE_ORIGIN, reply_markup=kb.commute_skip_kb())
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -238,10 +239,12 @@ async def cb_move_in(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(Onboarding.commute_origin, lambda c: c.data == kb.CB_COMMUTE_SKIP)
 async def cb_commute_skip(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(commute_origin=None)
+    await callback.message.delete()
+    await _flush(callback.message.bot, callback.message.chat.id, state)
     await state.set_state(Onboarding.dealbreakers)
     await state.update_data(dealbreakers=[])
-    await callback.message.answer(msg.ASK_DEALBREAKERS,
-                                  reply_markup=kb.dealbreakers_kb([]))
+    sent = await callback.message.answer(msg.ASK_DEALBREAKERS, reply_markup=kb.dealbreakers_kb([]))
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -271,9 +274,10 @@ async def msg_commute_origin(message: Message, state: FSMContext) -> None:
 async def cb_commute_minutes(callback: CallbackQuery, state: FSMContext) -> None:
     val = int(callback.data.split(":")[1])
     await state.update_data(commute_max_minutes=val)
+    await callback.message.delete()
     await state.set_state(Onboarding.commute_mode)
-    await callback.message.answer(msg.ASK_COMMUTE_MODE,
-                                  reply_markup=kb.commute_mode_kb())
+    sent = await callback.message.answer(msg.ASK_COMMUTE_MODE, reply_markup=kb.commute_mode_kb())
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -285,10 +289,12 @@ async def cb_commute_minutes(callback: CallbackQuery, state: FSMContext) -> None
 async def cb_commute_mode(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":", 1)[1]
     await state.update_data(commute_mode=value)
+    await callback.message.delete()
+    await _flush(callback.message.bot, callback.message.chat.id, state)
     await state.set_state(Onboarding.dealbreakers)
     await state.update_data(dealbreakers=[])
-    await callback.message.answer(msg.ASK_DEALBREAKERS,
-                                  reply_markup=kb.dealbreakers_kb([]))
+    sent = await callback.message.answer(msg.ASK_DEALBREAKERS, reply_markup=kb.dealbreakers_kb([]))
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -335,31 +341,28 @@ async def cb_agent_filter(callback: CallbackQuery, state: FSMContext) -> None:
     axes: list[str] = ["budget"]
     axis_priority: dict[str, str] = {}
 
-    # area: ask priority only when user picked multiple areas; single area = implicit MUST
     areas = data.get("areas", [])
     if len(areas) > 1:
         axes.append("area")
     else:
         axis_priority["area"] = "MUST"
 
-    # commute: ask only if user gave an origin
     if data.get("commute_origin"):
         axes.append("commute")
 
-    # rooms: ask only if user specified a count (rooms is None when user picked "any")
     if data.get("rooms") is not None:
         axes.append("rooms")
 
-    # furnishing axis removed — captured via `must_furnished` dealbreaker
-
     await state.update_data(axis_priority=axis_priority, pending_axes=axes)
+    await callback.message.delete()
     await state.set_state(Onboarding.axis_priority)
     first_axis = axes[0]
     label = AXIS_LABELS[first_axis]
-    await callback.message.answer(
+    sent = await callback.message.answer(
         msg.ASK_AXIS_PRIORITY.format(axis=label),
         reply_markup=kb.axis_priority_kb(first_axis),
     )
+    await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -375,17 +378,19 @@ async def cb_axis_priority(callback: CallbackQuery, state: FSMContext) -> None:
     axis_priority[axis_key] = priority.upper()
     pending: list[str] = [a for a in data.get("pending_axes", []) if a != axis_key]
     await state.update_data(axis_priority=axis_priority, pending_axes=pending)
+    await callback.message.delete()
     if pending:
         next_axis = pending[0]
         label = AXIS_LABELS[next_axis]
-        await callback.message.answer(
+        sent = await callback.message.answer(
             msg.ASK_AXIS_PRIORITY.format(axis=label),
             reply_markup=kb.axis_priority_kb(next_axis),
         )
+        await _track(state, sent.message_id)
     else:
         await state.set_state(Onboarding.free_text_wall)
-        await callback.message.answer(msg.FREE_TEXT_WALL,
-                                      reply_markup=kb.free_text_wall_kb())
+        sent = await callback.message.answer(msg.FREE_TEXT_WALL, reply_markup=kb.free_text_wall_kb())
+        await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -396,12 +401,13 @@ async def cb_axis_priority(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(Onboarding.free_text_wall, lambda c: c.data and c.data.startswith(f"{kb.CB_FREE_TEXT_WALL}:"))
 async def cb_free_text_wall(callback: CallbackQuery, state: FSMContext) -> None:
     choice = callback.data.split(":")[1]
+    await callback.message.delete()
     if choice == "skip":
         await _trigger_done(callback.message, callback.from_user, state)
     else:
         await state.set_state(Onboarding.free_text_1)
-        await callback.message.answer(msg.FREE_TEXT_1,
-                                      reply_markup=kb.free_text_skip_kb())
+        sent = await callback.message.answer(msg.FREE_TEXT_1, reply_markup=kb.free_text_skip_kb())
+        await _track(state, sent.message_id)
     await callback.answer()
 
 
@@ -432,14 +438,15 @@ async def msg_free_text_3(message: Message, state: FSMContext) -> None:
 @router.callback_query(StateFilter(Onboarding.free_text_1, Onboarding.free_text_2, Onboarding.free_text_3), lambda c: c.data == kb.CB_FREE_TEXT_SKIP)
 async def cb_free_text_skip(callback: CallbackQuery, state: FSMContext) -> None:
     current = await state.get_state()
+    await callback.message.delete()
     if current == Onboarding.free_text_1:
         await state.set_state(Onboarding.free_text_2)
-        await callback.message.answer(msg.FREE_TEXT_2,
-                                      reply_markup=kb.free_text_skip_kb())
+        sent = await callback.message.answer(msg.FREE_TEXT_2, reply_markup=kb.free_text_skip_kb())
+        await _track(state, sent.message_id)
     elif current == Onboarding.free_text_2:
         await state.set_state(Onboarding.free_text_3)
-        await callback.message.answer(msg.FREE_TEXT_3,
-                                      reply_markup=kb.free_text_skip_kb())
+        sent = await callback.message.answer(msg.FREE_TEXT_3, reply_markup=kb.free_text_skip_kb())
+        await _track(state, sent.message_id)
     else:
         await _trigger_done(callback.message, callback.from_user, state)
     await callback.answer()
