@@ -122,6 +122,13 @@ def test_apply_dislike_fishy_adds_phone_hash():
     assert "abc123" in u.distrust_set
 
 
+def test_apply_dislike_fishy_idempotent():
+    u = _user(distrust_set=["abc123"])
+    l = _listing(phone_hash="abc123")
+    apply_dislike_fishy(u, l)
+    assert u.distrust_set.count("abc123") == 1
+
+
 # --- apply_dislike_seen ---
 
 def test_apply_dislike_seen_adds_listing_id():
@@ -145,4 +152,4 @@ def test_apply_dislike_generic_moves_away_from_listing():
     l = _listing(embedding=emb)
     apply_dislike_generic(u, l)
     # pref moved away from emb direction → second component should decrease
-    assert u.preference_embedding[1] < 0.1
+    assert u.preference_embedding[1] < 0  # actually moved away (negative)
