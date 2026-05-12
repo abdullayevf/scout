@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_webhook_url: str = ""
     telegram_webhook_secret: str = ""
+    admin_token: str = ""
 
     @cached_property
     def postgres_dsn(self) -> str:
