@@ -119,6 +119,9 @@ async def on_contact(cb: CallbackQuery) -> None:
         if m is None:
             await cb.answer()
             return
+        if m.state in (MatchState.DISLIKED, MatchState.CONTACTED, MatchState.RENTED, MatchState.DEAD):
+            await cb.answer()
+            return
         listing = s.get(Listing, m.listing_id)
         phone = (listing.contact_phone_raw if listing else None) or "—"
         url = listing.source_url if listing else ""

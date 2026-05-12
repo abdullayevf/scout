@@ -306,3 +306,24 @@ async def test_on_contact_transitions_to_contacted_and_schedules_chase(engine, d
     assert m.state == MatchState.CONTACTED
     assert m.contacted_at is not None
     assert m.chase_48h_due_at is not None
+
+
+@pytest.mark.asyncio
+async def test_on_contact_ignores_already_contacted(engine, db_session):
+    Base.metadata.create_all(engine)
+    from apps.shared.enums import MatchState
+    u = _make_user(db_session, tg_user_id=408)
+    listing = _make_listing(db_session, source_id="L408")
+    listing.contact_phone_raw = "+998900000000"
+    m = _make_match(db_session, u.id, listing.id)
+    m.state = MatchState.CONTACTED
+    db_session.flush()
+    cb = _make_cb(f"contact:{m.id}", user_id=408)
+    cb.message.answer = AsyncMock()
+    with patch("apps.bot.handlers.match_callbacks.session_scope") as ss:
+        ss.return_value.__enter__.return_value = db_session
+        await on_contact(cb)
+    # Should not reveal phone or overwrite state
+    cb.message.answer.assert_not_called()
+    db_session.refresh(m)
+    assert m.state == MatchState.CONTACTED  # unchanged

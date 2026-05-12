@@ -19,7 +19,7 @@ def _normalize(v: list[float]) -> list[float]:
 
 
 def apply_like(user: User, listing: Listing, alpha: float = ALPHA_LIKE) -> None:
-    """pref ← normalize((1-α)·pref + α·listing.embedding)  — α controls shift strength."""
+    """pref ← normalize((1-α)·pref + α·listing.embedding) — α controls shift strength."""
     if user.preference_embedding is None or listing.embedding is None:
         return
     pref = np.array(user.preference_embedding, dtype=np.float32)
