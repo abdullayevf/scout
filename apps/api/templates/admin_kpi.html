@@ -1,0 +1,28 @@
+{% extends "admin_base.html" %}
+{% block content %}
+<h2>KPI Dashboard <small style="font-size:0.6em;color:var(--pico-muted-color)">(30-day window)</small></h2>
+<div class="grid">
+  <article>
+    <header>Like Rate</header>
+    <p style="font-size:2rem;margin:0">{{ "%.1f"|format(like_rate * 100) }}%</p>
+    <footer>liked + contacted + rented / all reacted</footer>
+  </article>
+  <article>
+    <header>Contact Rate</header>
+    <p style="font-size:2rem;margin:0">{{ "%.1f"|format(contact_rate * 100) }}%</p>
+    <footer>contacted + rented / all reacted</footer>
+  </article>
+  <article>
+    <header>Mute Rate</header>
+    <p style="font-size:2rem;margin:0">{{ "%.1f"|format(mute_rate * 100) }}%</p>
+    <footer>active users with zero reactions</footer>
+  </article>
+  <article>
+    <header>Median Days to Success</header>
+    <p style="font-size:2rem;margin:0">
+      {% if days_to_success %}{{ "%.1f"|format(days_to_success) }}d{% else %}—{% endif %}
+    </p>
+    <footer>signup → apartment found</footer>
+  </article>
+</div>
+{% endblock %}

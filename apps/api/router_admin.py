@@ -28,3 +28,15 @@ def admin_login(token: str = Query(default="")) -> RedirectResponse:
     resp = RedirectResponse(url="/admin", status_code=302)
     resp.set_cookie("admin_session", token, httponly=True, samesite="strict")
     return resp
+
+
+@router.get("", response_class=HTMLResponse)
+def page_kpi(request: Request, _: None = Depends(require_admin)) -> HTMLResponse:
+    with session_scope() as s:
+        ctx = {
+            "like_rate": kpi.like_rate(s),
+            "contact_rate": kpi.contact_rate(s),
+            "mute_rate": kpi.mute_rate(s),
+            "days_to_success": kpi.days_to_success(s),
+        }
+    return templates.TemplateResponse("admin_kpi.html", {"request": request, **ctx})
