@@ -246,3 +246,32 @@ def dislike_reasons_kb(match_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="👁 видел",           callback_data=f"dislike_reason:seen:{match_id}"),
         ],
     ])
+
+
+def chase_48h_kb(match_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Да",  callback_data=f"chase48y:{match_id}"),
+        InlineKeyboardButton(text="❌ Нет", callback_data=f"chase48n:{match_id}"),
+    ]])
+
+
+def chase_5d_kb(match_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🎉 Да, снял!", callback_data=f"chase5y:{match_id}"),
+        InlineKeyboardButton(text="Ещё ищу",      callback_data=f"chase5n:{match_id}"),
+    ]])
+
+
+def weekly_checkin_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔍 Ещё ищу",  callback_data="wcheckin:searching")],
+        [InlineKeyboardButton(text="🎉 Нашёл!",   callback_data="wcheckin:found")],
+        [InlineKeyboardButton(text="🚪 Прекращаю", callback_data="wcheckin:quit")],
+    ])
+
+
+def rented_pause_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="⏸ Приостановить", callback_data="rented:pause"),
+        InlineKeyboardButton(text="Продолжать",       callback_data="rented:continue"),
+    ]])
