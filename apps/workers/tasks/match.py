@@ -1,7 +1,6 @@
 """Match fanout, instant alerts, threshold recompute, dead cleanup."""
 
 import logging
-from collections import namedtuple
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -18,8 +17,7 @@ from apps.shared.matching.score import score_listing_for_user
 from apps.shared.models import Event, Listing, Match, User
 from apps.shared.telegram_send import send_match_message, send_plain_text
 from apps.workers.celery_app import app
-
-_WelcomePick = namedtuple("_WelcomePick", ["id", "score", "price_uzs", "area", "is_furnished", "listing_id"])
+from apps.workers.tasks.digest import _Pick as _WelcomePick
 
 log = logging.getLogger(__name__)
 
