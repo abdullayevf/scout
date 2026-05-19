@@ -67,3 +67,13 @@ async def _async_send_digest_header(user, count: int):
         )
     finally:
         await bot.session.close()
+
+def send_plain_text(user, text: str) -> None:
+    asyncio.run(_async_send_plain_text(user, text))
+
+async def _async_send_plain_text(user, text: str) -> None:
+    bot = Bot(token=settings.telegram_bot_token)
+    try:
+        await bot.send_message(chat_id=user.tg_user_id, text=text)
+    finally:
+        await bot.session.close()
