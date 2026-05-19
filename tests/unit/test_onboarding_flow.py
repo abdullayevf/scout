@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 from apps.bot.states import Onboarding
+from apps.shared.models import Base
 
 
 async def make_ctx(user_id: int = 123) -> FSMContext:
@@ -323,7 +324,7 @@ async def test_build_profile_uses_zero_vector_on_embed_failure():
         func_name = getattr(func, "__name__", "") or getattr(
             getattr(func, "__func__", None), "__name__", ""
         )
-        if func_name == "_upsert":
+        if func_name == "_run_upsert":
             # args = (u_data, keywords, emb)
             captured_emb.append(args[2])
             return None
@@ -346,3 +347,37 @@ async def test_build_profile_uses_zero_vector_on_embed_failure():
     assert isinstance(emb, list)
     assert len(emb) == settings.embedding_dim
     assert all(v == 0.0 for v in emb)
+
+
+def test_onboarding_triggers_welcome_task(engine, db_session):
+    from apps.bot.handlers import onboarding as ob_module
+    from unittest.mock import patch
+
+    Base.metadata.create_all(engine)
+    data = {
+        "tg_user_id": 9001, "tg_username": "u",
+        "search_type": "whole_apt_solo",
+        "budget_min": 1_000_000, "budget_max": 3_000_000,
+        "rooms": None,
+        "areas": ["Yunusabad"],
+        "axis_priority": {},
+        "agent_filter": "agents_ok",
+        "move_in_window": None,
+        "commute_origin": None,
+        "commute_origin_lat": None,
+        "commute_origin_lng": None,
+        "commute_max_minutes": None,
+        "commute_mode": None,
+        "dealbreakers": [],
+        "dealbreaker_keywords": [],
+        "tradeoff_hint_text": None,
+        "unacceptable_text": None,
+        "instant_reject_text": None,
+    }
+    with patch("apps.bot.handlers.onboarding.session_scope") as ss, \
+         patch("apps.bot.handlers.onboarding.match_welcome_for_user") as mw:
+        ss.return_value.__enter__.return_value = db_session
+        db_id = ob_module._run_upsert(data, [], [0.1] * 3072)
+
+    assert isinstance(db_id, int)
+    mw.delay.assert_called_once_with(db_id)

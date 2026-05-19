@@ -3,19 +3,24 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
+from datetime import UTC, datetime
 
 from aiogram import Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy import select
 
 from apps.bot import keyboards as kb
 from apps.bot import messages as msg
 from apps.bot.handlers.commands import _get_user
 from apps.bot.keyboards import AXIS_LABELS
 from apps.bot.states import Onboarding
+from apps.shared.db import session_scope
 from apps.shared.enums import UserState
 from apps.shared.geo.yandex import GeocodeResult, geocode
+from apps.shared.models import Event, User
+from apps.workers.tasks.match import match_welcome_for_user
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -469,6 +474,48 @@ async def cb_free_text_skip(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Module-level upsert helper (called via run_in_executor; also used in tests)
+# ---------------------------------------------------------------------------
+
+def _run_upsert(u_data: dict, keywords: list[str], emb: list[float]) -> int:
+    with session_scope() as s:
+        row = s.execute(
+            select(User).where(User.tg_user_id == u_data["tg_user_id"])
+        ).scalar_one_or_none()
+        if row is None:
+            row = User(tg_user_id=u_data["tg_user_id"])
+            s.add(row)
+        row.tg_username = u_data.get("tg_username")
+        row.search_type = u_data.get("search_type")
+        row.gender_pref = u_data.get("gender_pref")
+        row.agent_filter = u_data.get("agent_filter")
+        row.budget_min = u_data.get("budget_min")
+        row.budget_max = u_data.get("budget_max")
+        row.rooms = u_data.get("rooms")
+        row.areas = u_data.get("areas", [])
+        row.move_in_window = u_data.get("move_in_window")
+        row.commute_origin = u_data.get("commute_origin")
+        row.commute_origin_lat = u_data.get("commute_origin_lat")
+        row.commute_origin_lng = u_data.get("commute_origin_lng")
+        row.commute_max_minutes = u_data.get("commute_max_minutes")
+        row.commute_mode = u_data.get("commute_mode")
+        row.dealbreakers = u_data.get("dealbreakers", [])
+        row.dealbreaker_keywords = keywords
+        row.axis_priority = u_data.get("axis_priority", {})
+        row.tradeoff_hint_text = u_data.get("tradeoff_hint_text")
+        row.unacceptable_text = u_data.get("unacceptable_text")
+        row.instant_reject_text = u_data.get("instant_reject_text")
+        row.preference_embedding = emb
+        row.state = UserState.ACTIVE
+        row.onboarded_at = datetime.now(UTC)
+        s.add(Event(kind="onboarding_completed", user_id=row.tg_user_id))
+        s.flush()
+        user_db_id = row.id
+    match_welcome_for_user.delay(user_db_id)
+    return user_db_id
+
+
+# ---------------------------------------------------------------------------
 # DONE — background profile build
 # ---------------------------------------------------------------------------
 
@@ -484,15 +531,8 @@ async def _build_profile_async(message: Message, from_user, data: dict) -> None:
     tg_user_id = from_user.id
     tg_username = getattr(from_user, "username", None)
 
-    from datetime import UTC, datetime
-
-    from sqlalchemy import select
-
-    from apps.shared.db import session_scope
     from apps.shared.enrichment.embed import build_user_pref_text
-    from apps.shared.enums import UserState
     from apps.shared.llm.gemini import GeminiClient
-    from apps.shared.models import Event, User
 
     gemini = GeminiClient()
 
@@ -540,43 +580,10 @@ async def _build_profile_async(message: Message, from_user, data: dict) -> None:
         from apps.shared.config import settings
         embedding = [0.0] * settings.embedding_dim
 
-    # 3. Upsert User row
-    def _upsert(u_data: dict, keywords: list[str], emb: list[float]) -> None:
-        with session_scope() as s:
-            row = s.execute(
-                select(User).where(User.tg_user_id == u_data["tg_user_id"])
-            ).scalar_one_or_none()
-            if row is None:
-                row = User(tg_user_id=u_data["tg_user_id"])
-                s.add(row)
-            row.tg_username = u_data.get("tg_username")
-            row.search_type = u_data.get("search_type")
-            row.gender_pref = u_data.get("gender_pref")
-            row.agent_filter = u_data.get("agent_filter")
-            row.budget_min = u_data.get("budget_min")
-            row.budget_max = u_data.get("budget_max")
-            row.rooms = u_data.get("rooms")
-            row.areas = u_data.get("areas", [])
-            row.move_in_window = u_data.get("move_in_window")
-            row.commute_origin = u_data.get("commute_origin")
-            row.commute_origin_lat = u_data.get("commute_origin_lat")
-            row.commute_origin_lng = u_data.get("commute_origin_lng")
-            row.commute_max_minutes = u_data.get("commute_max_minutes")
-            row.commute_mode = u_data.get("commute_mode")
-            row.dealbreakers = u_data.get("dealbreakers", [])
-            row.dealbreaker_keywords = keywords
-            row.axis_priority = u_data.get("axis_priority", {})
-            row.tradeoff_hint_text = u_data.get("tradeoff_hint_text")
-            row.unacceptable_text = u_data.get("unacceptable_text")
-            row.instant_reject_text = u_data.get("instant_reject_text")
-            row.preference_embedding = emb
-            row.state = UserState.ACTIVE
-            row.onboarded_at = datetime.now(UTC)
-            s.add(Event(kind="onboarding_completed", user_id=row.tg_user_id))
-
+    # 3. Upsert User row and trigger welcome batch
     await loop.run_in_executor(
         None,
-        _upsert,
+        _run_upsert,
         {"tg_user_id": tg_user_id, "tg_username": tg_username, **data},
         dealbreaker_keywords,
         embedding,
