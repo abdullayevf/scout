@@ -123,14 +123,18 @@ async def on_contact(cb: CallbackQuery) -> None:
             await cb.answer()
             return
         listing = s.get(Listing, m.listing_id)
-        phone = (listing.contact_phone_raw if listing else None) or "—"
-        url = listing.source_url if listing else ""
+        phone = listing.contact_phone_raw if listing else None
         if listing:
             apply_contact(u, listing)
         m.state = MatchState.CONTACTED
         m.contacted_at = datetime.now(UTC)
         m.chase_48h_due_at = datetime.now(UTC) + timedelta(hours=48)
         s.add(Event(kind="match_btn_contact", user_id=cb.from_user.id, match_id=match_id))
-    await cb.message.answer(f"📞 {phone}\n\n🔗 {url}")
-    await cb.message.edit_reply_markup(reply_markup=None)
+    if phone:
+        new_text = (cb.message.text or "") + f"\n\n📞 {phone}"
+        await cb.message.edit_text(new_text, reply_markup=None)
+    else:
+        await cb.message.edit_reply_markup(reply_markup=None)
+        await cb.answer("Номер не найден — открой объявление на OLX", show_alert=True)
+        return
     await cb.answer()

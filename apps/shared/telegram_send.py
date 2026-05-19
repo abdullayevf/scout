@@ -11,8 +11,24 @@ def format_match_text(listing, reasons: list[str], prefix: str = "") -> str:
     lines: list[str] = []
     if prefix:
         lines.append(prefix)
-    lines.append(f"🏠 {rooms_str(listing.rooms)}, {tuman_ru(listing.area)}")
+
+    header = f"🏠 {rooms_str(listing.rooms)}, {tuman_ru(listing.area)}"
+    if listing.floor and listing.total_floors:
+        header += f" · {listing.floor}/{listing.total_floors} эт."
+    elif listing.floor:
+        header += f" · {listing.floor} эт."
+    lines.append(header)
+
     lines.extend(reasons)
+
+    amenities = []
+    if listing.is_furnished:
+        amenities.append("🛋 мебель")
+    if listing.has_parking:
+        amenities.append("🚗 парковка")
+    if amenities:
+        lines.append(" · ".join(amenities))
+
     if listing.summary_one_line:
         lines.append("")
         lines.append(listing.summary_one_line)

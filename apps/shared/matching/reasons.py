@@ -87,8 +87,8 @@ def build_reasons(user, listing, components: ScoreComponents) -> list[str]:
 
     out.append(f"🆕 {age_human(listing.posted_at)}")
 
-    if listing.area:
-        out.append(f"📍 {tuman_ru(listing.area)}")
+    if listing.location_text:
+        out.append(f"📍 {listing.location_text}")
 
     role = listing.poster_role
     if role == PosterRole.OWNER:
