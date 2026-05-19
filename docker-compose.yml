@@ -52,11 +52,12 @@ services:
 
   beat:
     build: .
-    command: celery -A apps.workers.celery_app beat --loglevel=INFO
+    command: celery -A apps.workers.celery_app beat --loglevel=INFO --schedule=/var/beat/celerybeat-schedule
     env_file: .env
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp-sa.json
     volumes:
+      - beatdata:/var/beat
       - ./secrets/gcp-sa.json:/run/secrets/gcp-sa.json:ro
     depends_on:
       - worker
@@ -95,3 +96,4 @@ services:
 volumes:
   pgdata:
   imgdata:
+  beatdata:

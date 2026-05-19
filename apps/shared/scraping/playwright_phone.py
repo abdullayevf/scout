@@ -1,4 +1,5 @@
 import logging
+import re
 
 from playwright.async_api import async_playwright
 
@@ -21,9 +22,8 @@ class PhoneRevealer:
             try:
                 await page.goto(listing_url, wait_until="domcontentloaded", timeout=timeout_ms)
                 # OLX phone-reveal button — text-based selectors are most stable across redesigns
-                button = page.get_by_role(
-                    "button",
-                    name=lambda t: bool(t and ("Показать телефон" in t or "Show phone" in t)),
+                button = page.get_by_role("button").filter(
+                    has_text=re.compile(r"Показать телефон|Show phone", re.IGNORECASE)
                 )
                 if await button.count() == 0:
                     log.warning("phone reveal button not found on %s", listing_url)
