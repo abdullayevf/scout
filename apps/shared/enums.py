@@ -60,3 +60,4 @@ class MatchState(StrEnum):
 class DeliveredVia(StrEnum):
     DIGEST  = "digest"
     INSTANT = "instant"
+    WELCOME = "welcome"
