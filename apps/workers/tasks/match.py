@@ -209,7 +209,7 @@ def match_welcome_for_user(self, user_id: int) -> dict:
         listings = list(s.execute(
             select(Listing)
             .where(Listing.state == ListingState.ACTIVE)
-            .where(Listing.posted_at >= cutoff)
+            .where(Listing.enriched_at >= cutoff)
             .where(Listing.suppressed.is_(False))
             .where(Listing.canonical_listing_id.is_(None))
         ).scalars())

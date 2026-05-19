@@ -26,6 +26,11 @@ app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    task_default_queue="celery",
+    task_routes={
+        "match.welcome.user": {"queue": "priority"},
+        "match.alert.instant": {"queue": "priority"},
+    },
 )
 
 app.conf.beat_schedule = {
