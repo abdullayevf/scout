@@ -1,6 +1,7 @@
 """Match fanout, instant alerts, threshold recompute, dead cleanup."""
 
 import logging
+from collections import namedtuple
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -15,7 +16,10 @@ from apps.shared.matching.coldstart import is_cold_start
 from apps.shared.matching.filters import python_filter_pass, sql_filter_candidates
 from apps.shared.matching.score import score_listing_for_user
 from apps.shared.models import Event, Listing, Match, User
+from apps.shared.telegram_send import send_match_message, send_plain_text
 from apps.workers.celery_app import app
+
+_WelcomePick = namedtuple("_WelcomePick", ["id", "score", "price_uzs", "area", "is_furnished", "listing_id"])
 
 log = logging.getLogger(__name__)
 
@@ -190,3 +194,80 @@ def _percentile(values: list[float], p: float) -> float:
     hi = min(lo + 1, len(sv) - 1)
     frac = k - lo
     return sv[lo] + (sv[hi] - sv[lo]) * frac
+
+
+@app.task(name="match.welcome.user", bind=True, max_retries=2, default_retry_delay=120)
+def match_welcome_for_user(self, user_id: int) -> dict:
+    from apps.bot.keyboards import match_actions_kb
+    from apps.bot.messages import welcome_batch_closing
+    from apps.shared.matching.coldstart import stratified_pick
+
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        if not user or user.state != UserState.ACTIVE:
+            return {"ok": False, "reason": "user inactive"}
+
+        cutoff = datetime.now(UTC) - timedelta(days=7)
+        listings = list(s.execute(
+            select(Listing)
+            .where(Listing.state == ListingState.ACTIVE)
+            .where(Listing.posted_at >= cutoff)
+            .where(Listing.suppressed.is_(False))
+            .where(Listing.canonical_listing_id.is_(None))
+        ).scalars())
+
+        existing_ids = {
+            row[0] for row in s.execute(
+                select(Match.listing_id).where(Match.user_id == user_id)
+            )
+        }
+
+        scored: list[tuple] = []
+        for listing in listings:
+            if listing.id in existing_ids:
+                continue
+            if not python_filter_pass(user, listing):
+                continue
+            score, reasons, _ = score_listing_for_user(user, listing)
+            if score < cfg.INSERT_THRESHOLD:
+                continue
+            m = Match(
+                user_id=user_id, listing_id=listing.id,
+                score=score, reasons=reasons,
+                state=MatchState.PENDING,
+            )
+            s.add(m)
+            s.flush()
+            scored.append((m, listing, score))
+
+        if not scored:
+            return {"ok": True, "matches": 0}
+
+        carries = [
+            _WelcomePick(
+                id=m.id, score=sc,
+                price_uzs=l.price_uzs or 0,
+                area=l.area or "",
+                is_furnished=l.is_furnished,
+                listing_id=l.id,
+            )
+            for m, l, sc in scored
+        ]
+        listing_by_id = {l.id: l for _, l, _ in scored}
+        match_by_id = {m.id: m for m, _, _ in scored}
+
+        picks = stratified_pick(carries, user, k=5)
+
+        for p in picks:
+            match = match_by_id[p.id]
+            listing = listing_by_id[p.listing_id]
+            send_match_message(user, listing, match, reply_markup=match_actions_kb(match.id))
+            match.state = MatchState.SENT
+            match.delivered_via = DeliveredVia.WELCOME
+            s.add(Event(
+                kind="match_sent_welcome",
+                user_id=user_id, listing_id=listing.id, match_id=match.id,
+            ))
+
+        send_plain_text(user, welcome_batch_closing(len(picks)))
+        return {"ok": True, "matches": len(picks)}
