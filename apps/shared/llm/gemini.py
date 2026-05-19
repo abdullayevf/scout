@@ -7,11 +7,24 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from apps.shared.config import settings
 
 
+def _strip_models_prefix(name: str) -> str:
+    return name[len("models/"):] if name.startswith("models/") else name
+
+
 class GeminiClient:
     def __init__(self) -> None:
-        self._client = genai.Client(api_key=settings.google_api_key)
-        self._model = settings.gemini_model
-        self._embed_model = settings.gemini_embed_model
+        if settings.gcp_project_id:
+            self._client = genai.Client(
+                vertexai=True,
+                project=settings.gcp_project_id,
+                location=settings.gcp_location,
+            )
+            self._model = _strip_models_prefix(settings.gemini_model)
+            self._embed_model = _strip_models_prefix(settings.gemini_embed_model)
+        else:
+            self._client = genai.Client(api_key=settings.google_api_key)
+            self._model = settings.gemini_model
+            self._embed_model = settings.gemini_embed_model
 
     @retry(stop=stop_after_attempt(4), wait=wait_exponential(min=1, max=10), reraise=True)
     def generate_json(self, prompt: str, schema: dict[str, Any]) -> dict[str, Any]:

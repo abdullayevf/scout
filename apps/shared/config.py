@@ -21,10 +21,16 @@ class Settings(BaseSettings):
 
     redis_url: str
 
-    google_api_key: str
+    google_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
     gemini_embed_model: str = "models/gemini-embedding-001"
     embedding_dim: int = 3072
+
+    # Vertex AI mode — when gcp_project_id is set, GeminiClient uses Vertex
+    # (billed against GCP project, supports $300 free trial credit) instead of
+    # the AI Studio prepay wallet.
+    gcp_project_id: str = ""
+    gcp_location: str = "us-central1"
 
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
