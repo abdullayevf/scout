@@ -120,17 +120,22 @@ class PhoneRevealer:
                 await page.goto(listing_url, wait_until="load", timeout=timeout_ms)
                 if _CLOUDFRONT_403_TITLE in (await page.title()):
                     return "BLOCKED"
-                # Persist cookies on the first successful CloudFront pass so
-                # subsequent reveals can skip the challenge.
-                state = await ctx.storage_state()
-                self._save_storage_state(state)
                 button = page.locator('button[data-cy="ad-contact-phone"]').first
                 try:
                     await button.wait_for(state="visible", timeout=timeout_ms)
                 except Exception:
                     log.warning("phone reveal button not found on %s", listing_url)
                     return None
-                await button.click(timeout=timeout_ms)
+                try:
+                    await button.scroll_into_view_if_needed(timeout=5000)
+                except Exception:
+                    pass
+                try:
+                    await button.click(timeout=timeout_ms)
+                except Exception:
+                    # Some listings render the button under a sticky banner;
+                    # force-click bypasses the actionability check.
+                    await button.click(timeout=timeout_ms, force=True)
                 try:
                     await page.wait_for_function(
                         f"() => new RegExp({_PHONE_RE!r}).test(document.body.innerText)",
@@ -141,7 +146,13 @@ class PhoneRevealer:
                     return None
                 body = await page.evaluate("() => document.body.innerText")
                 m = re.search(_PHONE_RE, body)
-                return m.group(0).strip() if m else None
+                phone = m.group(0).strip() if m else None
+                if phone:
+                    # Persist cookies only after a confirmed end-to-end success
+                    # so a half-passed session can never poison the cache.
+                    state = await ctx.storage_state()
+                    self._save_storage_state(state)
+                return phone
             finally:
                 await ctx.close()
                 await browser.close()
