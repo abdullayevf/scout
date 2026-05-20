@@ -91,8 +91,13 @@ class PhoneRevealer:
             log.warning("failed to save storage state: %s", e)
 
     async def _try_once(self, listing_url: str, timeout_ms: int) -> str | None:
+        # headless=False under xvfb-run gives us a real X11 display, which
+        # defeats most headless-Chromium fingerprints CloudFront looks for.
+        # If no DISPLAY is set (e.g. running locally without xvfb) we fall
+        # back to headless so tests still work.
+        use_headed = bool(os.environ.get("DISPLAY"))
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(headless=True, args=_LAUNCH_ARGS)
+            browser = await pw.chromium.launch(headless=not use_headed, args=_LAUNCH_ARGS)
             ctx_kwargs = dict(
                 user_agent=self._uas.next(),
                 locale="ru-RU",
