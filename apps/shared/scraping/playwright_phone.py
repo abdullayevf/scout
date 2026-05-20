@@ -9,6 +9,31 @@ log = logging.getLogger(__name__)
 
 _PHONE_RE = r"\+?998[\s\-]?\d{2}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}"
 
+# OLX is fronted by CloudFront and returns a 403 ERROR page to default
+# Playwright Chromium because `navigator.webdriver` and the bot-default
+# `HeadlessChrome` user-agent are easy automation tells. Patching these
+# in an init script makes the page render normally.
+_STEALTH_JS = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] });
+Object.defineProperty(navigator, 'languages', { get: () => ['ru-RU','ru','en-US','en'] });
+window.chrome = { runtime: {} };
+const origQuery = window.navigator.permissions && window.navigator.permissions.query;
+if (origQuery) {
+    window.navigator.permissions.query = (p) => (
+        p.name === 'notifications'
+            ? Promise.resolve({state: Notification.permission})
+            : origQuery(p)
+    );
+}
+"""
+
+_LAUNCH_ARGS = [
+    "--disable-blink-features=AutomationControlled",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+]
+
 
 class PhoneRevealer:
     """Reveals the phone behind OLX's "Show phone" click. One-shot per listing."""
@@ -18,8 +43,13 @@ class PhoneRevealer:
 
     async def reveal(self, listing_url: str, timeout_ms: int = 25000) -> str | None:
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(headless=True)
-            ctx = await browser.new_context(user_agent=self._uas.next(), locale="ru-RU")
+            browser = await pw.chromium.launch(headless=True, args=_LAUNCH_ARGS)
+            ctx = await browser.new_context(
+                user_agent=self._uas.next(),
+                locale="ru-RU",
+                viewport={"width": 1366, "height": 768},
+            )
+            await ctx.add_init_script(_STEALTH_JS)
             page = await ctx.new_page()
             try:
                 await page.goto(listing_url, wait_until="load", timeout=timeout_ms)
