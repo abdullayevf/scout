@@ -80,6 +80,13 @@ class PhoneRevealer:
             await ctx.add_init_script(_STEALTH_JS)
             page = await ctx.new_page()
             try:
+                # Warm-up: hit the OLX home first so CloudFront issues us session
+                # cookies before we touch the listing. Without this the first
+                # request to a deep URL is reliably served the 403 page.
+                await page.goto("https://www.olx.uz/", wait_until="load", timeout=timeout_ms)
+                if _CLOUDFRONT_403_TITLE in (await page.title()):
+                    return "BLOCKED"
+                await asyncio.sleep(1.5)
                 await page.goto(listing_url, wait_until="load", timeout=timeout_ms)
                 title = await page.title()
                 if _CLOUDFRONT_403_TITLE in title:
