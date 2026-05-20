@@ -12,6 +12,18 @@ from apps.shared.models import GeocodeCache
 
 log = logging.getLogger(__name__)
 
+# Tashkent bbox: SW corner ~ (lng 69.10, lat 41.16), NE ~ (lng 69.50, lat 41.40).
+# Yandex bbox param order: lng,lat~lng,lat. `rspn=1` makes it a hard constraint.
+TASHKENT_BBOX = "69.10,41.16~69.50,41.40"
+
+# Uzbekistan rough envelope used to sanity-check coordinates before routing.
+UZ_LAT_MIN, UZ_LAT_MAX = 37.0, 46.0
+UZ_LNG_MIN, UZ_LNG_MAX = 55.0, 74.0
+
+
+def _in_uzbekistan(lat: float, lng: float) -> bool:
+    return UZ_LAT_MIN <= lat <= UZ_LAT_MAX and UZ_LNG_MIN <= lng <= UZ_LNG_MAX
+
 
 @dataclass(frozen=True)
 class GeocodeResult:
@@ -24,25 +36,29 @@ def _normalize_query(q: str) -> str:
     return " ".join(q.lower().split())
 
 
-def geocode(query: str) -> GeocodeResult:
-    norm = _normalize_query(query)
+def geocode(query: str, bbox: str | None = TASHKENT_BBOX) -> GeocodeResult:
+    cache_key = f"{_normalize_query(query)}|{bbox or ''}"
     with session_scope() as s:
         row = s.execute(
-            select(GeocodeCache).where(GeocodeCache.query_norm == norm)
+            select(GeocodeCache).where(GeocodeCache.query_norm == cache_key)
         ).scalar_one_or_none()
         if row is not None:
             return GeocodeResult(row.lat, row.lng, row.matched_text)
 
     api_key = os.environ.get("YANDEX_GEOCODE_API_KEY", "")
+    params = {
+        "apikey": api_key,
+        "format": "json",
+        "geocode": query,
+        "lang": "ru_RU",
+        "results": 1,
+    }
+    if bbox:
+        params["bbox"] = bbox
+        params["rspn"] = 1
     r = httpx.get(
         "https://geocode-maps.yandex.ru/1.x/",
-        params={
-            "apikey": api_key,
-            "format": "json",
-            "geocode": query,
-            "lang": "ru_RU",
-            "results": 1,
-        },
+        params=params,
         timeout=10.0,
     )
     r.raise_for_status()
@@ -66,7 +82,7 @@ def geocode(query: str) -> GeocodeResult:
         stmt = (
             pg_insert(GeocodeCache)
             .values(
-                query_norm=norm,
+                query_norm=cache_key,
                 lat=result.lat,
                 lng=result.lng,
                 matched_text=result.matched_text,
@@ -101,7 +117,20 @@ def route_minutes(
     dest_lng: float,
     mode: str = "car",
 ) -> int | None:
-    """Return travel time in minutes using Yandex Routing API, haversine fallback."""
+    """Return travel time in minutes using Yandex Routing API, haversine fallback.
+
+    Returns None if either endpoint sits outside Uzbekistan — that almost always
+    means geocoding produced a garbage hit (e.g. matching a venue name to a
+    same-named place on another continent) and any "route" would be meaningless.
+    """
+    if not (_in_uzbekistan(origin_lat, origin_lng) and _in_uzbekistan(dest_lat, dest_lng)):
+        log.warning(
+            "route_minutes: coords outside UZ envelope, refusing route "
+            "origin=(%s,%s) dest=(%s,%s)",
+            origin_lat, origin_lng, dest_lat, dest_lng,
+        )
+        return None
+
     _MODE_MAP = {"car": "driving", "public": "transit", "walk": "walking"}
     yandex_mode = _MODE_MAP.get(mode, "driving")
 

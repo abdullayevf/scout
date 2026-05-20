@@ -7,6 +7,8 @@ from apps.shared.scraping.ua_pool import UAPool
 
 log = logging.getLogger(__name__)
 
+_PHONE_RE = r"\+?998[\s\-]?\d{2}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}"
+
 
 class PhoneRevealer:
     """Reveals the phone behind OLX's "Show phone" click. One-shot per listing."""
@@ -14,28 +16,31 @@ class PhoneRevealer:
     def __init__(self) -> None:
         self._uas = UAPool()
 
-    async def reveal(self, listing_url: str, timeout_ms: int = 20000) -> str | None:
+    async def reveal(self, listing_url: str, timeout_ms: int = 25000) -> str | None:
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(headless=True)
             ctx = await browser.new_context(user_agent=self._uas.next(), locale="ru-RU")
             page = await ctx.new_page()
             try:
-                await page.goto(listing_url, wait_until="domcontentloaded", timeout=timeout_ms)
-                # OLX phone-reveal button — text-based selectors are most stable across redesigns
-                button = page.get_by_role("button").filter(
-                    has_text=re.compile(r"Показать телефон|Show phone", re.IGNORECASE)
-                )
-                if await button.count() == 0:
+                await page.goto(listing_url, wait_until="load", timeout=timeout_ms)
+                button = page.locator('button[data-cy="ad-contact-phone"]').first
+                try:
+                    await button.wait_for(state="visible", timeout=timeout_ms)
+                except Exception:
                     log.warning("phone reveal button not found on %s", listing_url)
                     return None
-                await button.first.click(timeout=timeout_ms)
-                # phone usually rendered inside an <a href="tel:..."> or within a span next to the button
-                tel = page.locator("a[href^='tel:']").first
-                await tel.wait_for(state="visible", timeout=timeout_ms)
-                href = await tel.get_attribute("href")
-                if href and href.startswith("tel:"):
-                    return href.removeprefix("tel:").strip()
-                return (await tel.inner_text()).strip() or None
+                await button.click(timeout=timeout_ms)
+                try:
+                    await page.wait_for_function(
+                        f"() => new RegExp({_PHONE_RE!r}).test(document.body.innerText)",
+                        timeout=timeout_ms,
+                    )
+                except Exception:
+                    log.warning("phone number did not appear after click on %s", listing_url)
+                    return None
+                body = await page.evaluate("() => document.body.innerText")
+                m = re.search(_PHONE_RE, body)
+                return m.group(0).strip() if m else None
             finally:
                 await ctx.close()
                 await browser.close()
