@@ -37,7 +37,8 @@ services:
 
   worker:
     build: .
-    command: xvfb-run -a -s "-screen 0 1366x768x24" celery -A apps.workers.celery_app worker --loglevel=INFO --concurrency=1 -Q priority,celery
+    command: >
+      sh -c "Xvfb :99 -screen 0 1366x768x24 -ac >/dev/null 2>&1 & sleep 1 && DISPLAY=:99 celery -A apps.workers.celery_app worker --loglevel=INFO --concurrency=1 -Q priority,celery"
     env_file: .env
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp-sa.json
