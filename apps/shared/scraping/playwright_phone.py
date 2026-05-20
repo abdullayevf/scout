@@ -1,6 +1,9 @@
 import asyncio
+import json
 import logging
+import os
 import re
+from pathlib import Path
 
 from playwright.async_api import async_playwright
 
@@ -12,8 +15,9 @@ _PHONE_RE = r"\+?998[\s\-]?\d{2}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}"
 
 # OLX sits behind CloudFront and intermittently serves
 # "ERROR: The request could not be satisfied" to headless Chromium.
-# Stealth patches hide the most obvious automation tells; the retry loop
-# handles the residual flakiness when patches alone are not enough.
+# Stealth patches hide the most obvious automation tells; storage_state
+# persistence keeps the bot-detection cookie from the first successful
+# pass so subsequent reveals reuse the warm session.
 _STEALTH_JS = """
 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
 Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] });
@@ -44,7 +48,8 @@ _LAUNCH_ARGS = [
 ]
 
 _CLOUDFRONT_403_TITLE = "ERROR: The request could not be satisfied"
-_MAX_ATTEMPTS = 3
+_MAX_ATTEMPTS = 4
+_STORAGE_PATH = Path(os.environ.get("OLX_STORAGE_PATH", "/data/images/.olx_state.json"))
 
 
 class PhoneRevealer:
@@ -69,14 +74,34 @@ class PhoneRevealer:
             return result
         return None
 
+    def _load_storage_state(self) -> dict | None:
+        if not _STORAGE_PATH.exists():
+            return None
+        try:
+            return json.loads(_STORAGE_PATH.read_text())
+        except Exception as e:
+            log.warning("failed to load storage state: %s", e)
+            return None
+
+    def _save_storage_state(self, state: dict) -> None:
+        try:
+            _STORAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            _STORAGE_PATH.write_text(json.dumps(state))
+        except Exception as e:
+            log.warning("failed to save storage state: %s", e)
+
     async def _try_once(self, listing_url: str, timeout_ms: int) -> str | None:
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(headless=True, args=_LAUNCH_ARGS)
-            ctx = await browser.new_context(
+            ctx_kwargs = dict(
                 user_agent=self._uas.next(),
                 locale="ru-RU",
                 viewport={"width": 1366, "height": 768},
             )
+            storage = self._load_storage_state()
+            if storage:
+                ctx_kwargs["storage_state"] = storage
+            ctx = await browser.new_context(**ctx_kwargs)
             await ctx.add_init_script(_STEALTH_JS)
             page = await ctx.new_page()
             try:
@@ -88,9 +113,12 @@ class PhoneRevealer:
                     return "BLOCKED"
                 await asyncio.sleep(1.5)
                 await page.goto(listing_url, wait_until="load", timeout=timeout_ms)
-                title = await page.title()
-                if _CLOUDFRONT_403_TITLE in title:
+                if _CLOUDFRONT_403_TITLE in (await page.title()):
                     return "BLOCKED"
+                # Persist cookies on the first successful CloudFront pass so
+                # subsequent reveals can skip the challenge.
+                state = await ctx.storage_state()
+                self._save_storage_state(state)
                 button = page.locator('button[data-cy="ad-contact-phone"]').first
                 try:
                     await button.wait_for(state="visible", timeout=timeout_ms)
