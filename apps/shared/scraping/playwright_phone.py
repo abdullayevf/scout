@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 
@@ -9,15 +10,17 @@ log = logging.getLogger(__name__)
 
 _PHONE_RE = r"\+?998[\s\-]?\d{2}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}"
 
-# OLX is fronted by CloudFront and returns a 403 ERROR page to default
-# Playwright Chromium because `navigator.webdriver` and the bot-default
-# `HeadlessChrome` user-agent are easy automation tells. Patching these
-# in an init script makes the page render normally.
+# OLX sits behind CloudFront and intermittently serves
+# "ERROR: The request could not be satisfied" to headless Chromium.
+# Stealth patches hide the most obvious automation tells; the retry loop
+# handles the residual flakiness when patches alone are not enough.
 _STEALTH_JS = """
 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
 Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] });
 Object.defineProperty(navigator, 'languages', { get: () => ['ru-RU','ru','en-US','en'] });
-window.chrome = { runtime: {} };
+Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+window.chrome = { runtime: {}, app: {}, csi: () => {}, loadTimes: () => {} };
 const origQuery = window.navigator.permissions && window.navigator.permissions.query;
 if (origQuery) {
     window.navigator.permissions.query = (p) => (
@@ -26,6 +29,12 @@ if (origQuery) {
             : origQuery(p)
     );
 }
+const getParameter = WebGLRenderingContext.prototype.getParameter;
+WebGLRenderingContext.prototype.getParameter = function(parameter) {
+    if (parameter === 37445) return 'Intel Inc.';
+    if (parameter === 37446) return 'Intel Iris OpenGL Engine';
+    return getParameter.apply(this, [parameter]);
+};
 """
 
 _LAUNCH_ARGS = [
@@ -33,6 +42,9 @@ _LAUNCH_ARGS = [
     "--no-sandbox",
     "--disable-dev-shm-usage",
 ]
+
+_CLOUDFRONT_403_TITLE = "ERROR: The request could not be satisfied"
+_MAX_ATTEMPTS = 3
 
 
 class PhoneRevealer:
@@ -42,6 +54,22 @@ class PhoneRevealer:
         self._uas = UAPool()
 
     async def reveal(self, listing_url: str, timeout_ms: int = 25000) -> str | None:
+        for attempt in range(1, _MAX_ATTEMPTS + 1):
+            result = await self._try_once(listing_url, timeout_ms)
+            if result == "BLOCKED":
+                if attempt < _MAX_ATTEMPTS:
+                    log.warning(
+                        "CloudFront blocked reveal for %s (attempt %d/%d), retrying",
+                        listing_url, attempt, _MAX_ATTEMPTS,
+                    )
+                    await asyncio.sleep(2 * attempt)
+                    continue
+                log.warning("CloudFront blocked reveal for %s after %d attempts", listing_url, _MAX_ATTEMPTS)
+                return None
+            return result
+        return None
+
+    async def _try_once(self, listing_url: str, timeout_ms: int) -> str | None:
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(headless=True, args=_LAUNCH_ARGS)
             ctx = await browser.new_context(
@@ -53,6 +81,9 @@ class PhoneRevealer:
             page = await ctx.new_page()
             try:
                 await page.goto(listing_url, wait_until="load", timeout=timeout_ms)
+                title = await page.title()
+                if _CLOUDFRONT_403_TITLE in title:
+                    return "BLOCKED"
                 button = page.locator('button[data-cy="ad-contact-phone"]').first
                 try:
                     await button.wait_for(state="visible", timeout=timeout_ms)
